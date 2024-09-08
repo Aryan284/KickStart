@@ -3871,6 +3871,7 @@ def availableDays(n, calendar, D, P):
     
     return allAvailable, pAvailable
 # 2nd Follow up
+
 class Block:
     def __init__(self, personId, startDay, endDay):
         self.personId = personId
