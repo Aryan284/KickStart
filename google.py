@@ -770,6 +770,73 @@ print(func([ [2, 3, 1, 4, 3, 5, 6]]))
 
 
 # Given a tree having nodes with value 0 and 1. write a function to return the number of islands in tree?
+# Binary Tree:
+class TreeNode:
+    def __init__(self, val=0, left=None, right=None):
+        self.val = val
+        self.left = left
+        self.right = right
+
+def count_islands(root):
+    def dfs(node, visited):
+        if not node or node.val == 0 or node in visited:
+            return 0
+        visited.add(node)
+        size = 1  # Current node contributes to the size
+        size += dfs(node.left, visited)
+        size += dfs(node.right, visited)
+        return size
+
+    def dfs_canonical(node):
+        if not node or node.val == 0:
+            return ""
+        left_structure = dfs_canonical(node.left)
+        right_structure = dfs_canonical(node.right)
+        return f"(1{left_structure}{right_structure})"
+
+    visited = set()
+    island_count = 0
+    sizes = set()
+    structures = set()
+
+    def explore_tree(node):
+        nonlocal island_count
+        if not node:
+            return
+        if node.val == 1 and node not in visited:
+            size = dfs(node, visited)
+            sizes.add(size)
+            structure = dfs_canonical(node)
+            structures.add(structure)
+            island_count += 1
+        explore_tree(node.left)
+        explore_tree(node.right)
+
+    explore_tree(root)
+    return island_count, sizes, structures
+
+# Example usage:
+root = TreeNode(0)
+root.left = TreeNode(1)
+root.right = TreeNode(1)
+root.left.left = TreeNode(1)
+root.right.right = TreeNode(1)
+
+root.left.right = TreeNode(1)
+root.right.left = TreeNode(1)
+root.right.left.left = TreeNode(0)
+root.right.left.right = TreeNode(0)
+root.right.right.left = TreeNode(0)
+root.right.right.right = TreeNode(0)
+root.right.right.right.left = TreeNode(0)
+root.right.right.right.left.left = TreeNode(1)
+
+
+island_count, sizes, structures = count_islands(root)
+print("Number of islands:", island_count)
+print("Sizes of islands:", sizes)
+print("Number of non-isomorphic structures:", len(structures))
+
 
 # O(N)
 class Node:
@@ -802,6 +869,60 @@ tree.children[2].addChild(Node(1))
 
 tree.children[1].children[0].addChild(Node(1))
 print(count_island(tree))
+
+
+# Follow up Distinct island
+dic = {0: 0}# (Will store the number of islands (using dictionary for passing by reference)).
+s = set([]) #(Will contain the distinct sizes of the islands).
+
+
+class Node:
+    def __init__(self, val=0) -> None:
+        self.val = val
+        self.child = []
+
+    def addChild(self, node):
+        self.child.append(node)
+
+
+node1 = Node(0)
+node2 = Node(1)
+node3 = Node(1)
+node4 = Node(1)
+node5 = Node(1)
+node6 = Node(0)
+node1.addChild(node2)
+node2.addChild(node6)
+node6.addChild(node5)
+node5.addChild(node4)
+node1.addChild(node3)
+
+
+def f(node, visited, parent):
+    size = 0
+    # island_count = 0
+    visited.add(node)
+    if (parent and parent.val == 0 and node.val == 1):
+        dic[0] += 1
+    for child in node.child:
+        if (child.val == 0):
+            f(child, visited, node)
+        else:
+            size += f(child, visited, node)
+    if (parent and node.val == parent.val and node.val == 1):
+        return size+1
+    else:
+        if (parent and parent.val == 0 and node.val == 1):
+            s.add(size+1)
+        return 0
+
+
+f(node1, set([]), None)
+print(s, dic[0])
+
+
+
+
 
 # There are a few nodes of the graph given where each node is associated with a specified weight. 
 # To travel from node 1 to node 2, it takes some prescribed time. We need to traverse the node starting from node A,
@@ -1856,7 +1977,7 @@ def func(arr):
 arr = []
 func(arr)
 
-# Commit offset
+# Greedy Commit offset
 def greedy_commits(arr):
     ready_offset = set()
     res = [-1] * len(arr)
@@ -1872,12 +1993,46 @@ def greedy_commits(arr):
             ready_offset.add(offset)
     return res
 
-print(greedy_commits([2, 0, 1, 4, 3, 6])) # Output: [-1, 0, 2, -1, 4, -1]
-print(greedy_commits([2, 4, 5, 0, 1, 3, 6])) # Output: [-1, -1, -1, 0, 2, 5, 6]
-print(greedy_commits([2, 0, 1]))  # Output: [-1, 0, 2]
-print(greedy_commits([0, 1, 2]))  # Output: [0, 1, 2]
-print(greedy_commits([2, 1, 0, 5, 4]))  # Output: [-1, -1, 2, -1, -1]
+# print(greedy_commits([2, 0, 1, 4, 3, 6])) # Output: [-1, 0, 2, -1, 4, -1]
+# print(greedy_commits([2, 4, 5, 0, 1, 3, 6])) # Output: [-1, -1, -1, 0, 2, 5, 6]
+# print(greedy_commits([2, 0, 1]))  # Output: [-1, 0, 2]
+# print(greedy_commits([0, 1, 2]))  # Output: [0, 1, 2]
+# print(greedy_commits([2, 1, 0, 5, 4]))  # Output: [-1, -1, 2, -1, -1]
         
+# O(1) Space
+def main():
+    def get_offset(nums):
+        result = []
+        curr_offset = -1
+        n = len(nums)
+        zero_val_index_covered = False
+        
+        for i in range(n):
+            if abs(nums[i]) == curr_offset + 1:
+                curr_offset += 1
+                while curr_offset + 1 < n and (nums[curr_offset + 1] < 0 or (nums[curr_offset + 1] == 0 and zero_val_index_covered)):
+                    curr_offset += 1
+                result.append(curr_offset)
+            else:
+                result.append(-1)
+                curr_nums = abs(nums[i])
+                if curr_nums < n:
+                    if nums[curr_nums] == 0:
+                        zero_val_index_covered = True
+                    else:
+                        nums[curr_nums] *= -1
+        
+        print(result)
+
+    # print(get_offset([2, 0, 1, 4, 3, 6])) # Output: [-1, 0, 2, -1, 4, -1]
+    # print(get_offset([2, 4, 5, 0, 1, 3, 6])) # Output: [-1, -1, -1, 0, 2, 5, 6]
+    # print(get_offset([2, 0, 1]))  # Output: [-1, 0, 2]
+    # print(get_offset([0, 1, 2]))  # Output: [0, 1, 2]
+    # print(get_offset([2, 1, 0, 5, 4]))  # Output: [-1, -1, 2, -1, -1]
+
+main()
+
+
 
 # find the largest k digit number 
 
@@ -1943,7 +2098,33 @@ edges = [(0, 1), (1, 2), (2, 0)]
 print(func(edges, n))
 
 # Car Interval booking 
+# TC: O(NlogN) SC:O(N)
+# only count
+class Solution:
+    def get_min_car_count(self, time_intervals):
+        if not time_intervals:
+            return 0
+        
+        events = []
+        for start, end in time_intervals:
+            events.append((start, 1))
+            events.append((end, -1))
+        
+        events.sort()
+        max_car_count = 0
+        current_car_count = 0
+        for _, event_type in events:
+            current_car_count += event_type
+            max_car_count = max(max_car_count, current_car_count)
+    
+        return max_car_count
+        
+a = [(1, 3), (2, 5), (6, 8), (7, 10), (9, 10)]
+obj = Solution()
+print(obj.get_min_car_count(a))
 
+
+# Print the car allocation
 import heapq
 
 def allocate_cars(intervals):
@@ -2082,8 +2263,9 @@ for _ in range(10):
     print(f"Available Songs: {player.available_songs}")
 
 
-#  items grouped into sections, each of equal size.
+# items grouped into sections, each of equal size.
 # if total unique elements(in all segments) in input = u and total elements = n, then TC: O(u * log u + n)
+
 from collections import defaultdict
 
 def get_rearranged_array(input_list):
@@ -4045,3 +4227,412 @@ prefix = "go"
 print(better_binary_search(array,prefix))
 
 
+
+# Binary tree inorder nums is good or bad
+Time Complexity: O(n^2)
+Space Complexity: O(n)
+class TreeNode:
+    def __init__(self, val=0, left=None, right=None):
+        self.val = val
+        self.left = left
+        self.right = right
+
+# inorder dfs
+def dfs(root): 
+    if not root: return []
+    return dfs(root.left) + [root.val] + dfs(root.right)
+
+def is_good(nums, root):
+    inorder_sequence = dfs(root)
+    
+    for i in range(1, len(nums)):
+        prev = inorder_sequence.index(nums[i-1])
+        curr = inorder_sequence.index(nums[i]) 
+        if prev > curr: return False
+    
+    return True
+
+root = TreeNode(0)
+root.left = TreeNode(1)
+root.right = TreeNode(2)
+root.left.left = TreeNode(3)
+root.left.right = TreeNode(4)
+
+print(is_good([1, 4, 2], root))  # Output: True
+print(is_good([3, 1, 0], root))  # Output: True
+print(is_good([3, 4, 1], root))  # Output: False
+
+# you could do inOrder traversal, and forwarding the index if we meet the condition nums[index] == node.value,
+
+# nums is Good: index can reach the end of nums
+# nums is Bad: index will never reach the end of nums
+
+class TreeNode:
+    def __init__(self, val=0, left=None, right=None):
+        self.val = val
+        self.left = left
+        self.right = right
+
+class Solution:
+    def isGoodSequence(self, root: TreeNode, nums: list) -> bool:
+        index = [0]  # Using a list to mimic mutable integer
+        return self.inOrder(root, nums, index)
+
+    def inOrder(self, root: TreeNode, nums: list, index: list) -> bool:
+        if index[0] == len(nums):
+            return True
+        if root is None:
+            return False
+        left = self.inOrder(root.left, nums, index)
+        if root.val == nums[index[0]]:
+            index[0] += 1
+        right = self.inOrder(root.right, nums, index)
+        return left or right
+
+
+# Merge Interval based on importance
+intervals = [[1,5],[2,11],[8,9]]
+imps = [1,0,1]
+res = []
+nImp = []
+
+for i in range(len(intervals)):
+    if imps[i] == 1:
+        res.append(intervals[i])
+    else:
+        nImp.append(intervals[i])
+
+impM = [0] * 60
+
+for p in res:
+    impM[p[0]] += 1
+    impM[p[1] + 1] -= 1
+
+nImpM = [0] * 60
+for q in nImp:
+    nImpM[q[0]] += 1
+    nImpM[q[1]] -= 1
+
+pi = 0
+npi = 0
+start = -1
+for i in range(60):
+    pi += impM[i]
+    npi += nImpM[i]
+
+    if npi > 0 and pi == 0 and start == -1:
+        start = i
+    elif start != -1 and pi > 0:
+        res.append([start, i - 1])
+        start = -1
+    elif start != -1 and pi == 0 and npi == 0:
+        res.append([start, i])
+        start = -1
+
+# lets merge the intervals in the subres
+res.sort(key=lambda x: x[0])
+
+result = []
+
+for r in res:
+    if not result:
+        result.append(r)
+    else:
+        curr = r
+        if result[-1][1] >= curr[0]:
+            result[-1][1] = max(result[-1][1], curr[1])
+        else:
+            result.append(curr)
+
+print(result)
+
+
+#  widest interval with a net loss / wide ramp
+# O(N) and O(N)
+def func(arr):
+    stack = []
+    for i, v in enumerate(arr):
+        if not stack or v > arr[stack[-1]]:
+            stack.append(i)
+    maxwidth = 0
+    for i in range(len(arr) - 1, -1, -1):
+        val = arr[i]
+        while stack and val <= arr[stack[-1]]:
+            maxwidth = max(maxwidth, i - stack.pop())
+    return maxwidth
+arr = [ 50, 52, 58, 54, 57, 51, 55, 60, 62, 65, 68, 72, 62, 61, 59, 63, 72]
+print(func(arr))
+
+#  install an water tank such that water can reach to the houses
+# Time Complexity: O(mnk)
+# Space Complexity: O(m*n)
+def get_water_tank_position(grid, houses):
+    m, n, k = len(grid), len(grid[0]), len(houses)
+    visited_counter = Counter()
+    
+    def bfs(i, j):
+        q = deque([[i, j]])
+        visited = set()
+        
+        while q:
+            i, j = q.popleft()
+            
+            if (i, j) in visited:
+                continue
+            visited.add((i, j))
+            visited_counter[(i, j)] += 1
+            
+            for x, y in [[i+1, j], [i-1, j], [i, j+1], [i, j-1]]:
+                # assuming water can flow if water_level xy >= water_level ij
+                # check only > if water can not flow in equal level
+                if 0 <= x < m and 0 <= y < n and grid[x][y] >= grid[i][j] and (x, y) not in visited:
+                    q.append([x, y])
+    
+    for i, j in houses:
+        bfs(i, j)
+        
+    water_tanks = []
+    
+    for position in visited_counter:
+        if visited_counter[position] == k:
+            water_tanks.append(position)
+    
+    # You can return the first value if only one position is required
+    return water_tanks
+    
+
+grid = [
+    [6, 4, 7, 4, 6],
+    [4, 4, 8, 9, 7],
+    [7, 8, 9, 7, 6],
+    [5, 8, 1, 3, 4]]
+
+houses = [(1,1), (3,2), (2,4)] 
+
+print(get_water_tank_position(grid, houses))
+
+
+# list of user sessions
+def get_user_count(sessions, n):
+    line_sweep = [0] * (n + 1)
+    
+    for s, e in sessions:
+        line_sweep[s] += 1
+        line_sweep[e + 1] -= 1
+    
+    user_counts = [line_sweep[0]]
+    for i in range(1, n):
+        line_sweep[i] += line_sweep[i - 1]
+        user_counts.append(line_sweep[i])
+    
+    return user_counts
+
+if __name__ == "__main__":
+    sessions = [(0, 3), (1, 4)]
+    user_counts = get_user_count(sessions, 7)
+    print(" ".join(map(str, user_counts)))
+
+# all the intervals have anything in common.
+def has_common_interval(intervals):
+    if not intervals:
+        return False  # No intervals provided
+    
+    max_start = max([interval[0] for interval in intervals])
+    min_end = min([interval[1] for interval in intervals])
+    
+    # Check if there is a common interval
+    return max_start <= min_end
+
+# Example usage:
+intervals = [(1, 5), (2, 6), (4, 8), (5, 9)]
+print(has_common_interval(intervals))  # Output: True
+
+intervals2 = [(1, 5), (6, 10), (11, 15)]
+print(has_common_interval(intervals2))  # Output: False
+
+
+# seller will give orders SellOrder
+# # find the cheapest order, which was given first 
+
+import heapq
+
+class SellOrderSystem:
+    def __init__(self):
+        self.active_orders = {}  # Maps seller_id to their current active order (price, timestamp)
+        self.sell_orders_heap = []  # Min-heap storing (price, timestamp, seller_id)
+    
+    def sell_order(self, seller_id, price, timestamp):
+        """
+        seller_id: ID of the seller placing the order
+        price: Price at which the seller is placing the order
+        timestamp: The timestamp when the order is placed (provided by the user)
+        """
+        # If the seller already has an active order, we need to invalidate the old one
+        if seller_id in self.active_orders:
+            old_price, old_timestamp = self.active_orders[seller_id]
+            # No explicit removal is necessary; old orders will be skipped during buy_order
+
+        # Add the new order as the active order for this seller
+        self.active_orders[seller_id] = (price, timestamp)
+        
+        # Push the new order into the heap
+        heapq.heappush(self.sell_orders_heap, (price, timestamp, seller_id))
+    
+    def buy_order(self):
+        """
+        Returns the cheapest available order (based on price and timestamp).
+        The order is removed from the system.
+        """
+        # Find the cheapest active order
+        while self.sell_orders_heap:
+            price, timestamp, seller_id = heapq.heappop(self.sell_orders_heap)
+            
+            # Check if this order is still valid by comparing it to the active order for this seller
+            if self.active_orders.get(seller_id) == (price, timestamp):
+                # The order is valid, remove it from active orders and return it
+                del self.active_orders[seller_id]
+                return seller_id, price, timestamp
+        
+        # If no valid orders are found, return None
+        return None
+
+# Example usage
+system = SellOrderSystem()
+
+# Sellers place their orders with user-defined timestamps
+system.sell_order("seller_1", 100, 3)  # Seller 1 places an order with price 100 at timestamp 3
+system.sell_order("seller_2", 90, 2)   # Seller 2 places an order with price 90 at timestamp 2
+system.sell_order("seller_3", 110, 5)  # Seller 1 places a new order with price 110 at timestamp 5
+
+# Buyer purchases the cheapest available order
+print(system.buy_order())  # Should return seller_2's order: ('seller_2', 90, 2)
+
+# Buyer purchases the next cheapest available order
+print(system.buy_order())  # Should return seller_1's order: ('seller_1', 110, 5)
+
+# Seller 1 places a new order
+system.sell_order("seller_1", 80, 1)
+
+# Buyer purchases the next cheapest available order
+print(system.buy_order())  # Should return seller_1's new order: ('seller_1', 80, 1)
+
+# Check remaining orders
+print(system.buy_order())  # Should return None as there are no more valid orders
+
+
+
+
+
+# Router Wirless range 
+# Time:V^2
+
+# need to iterate and check all possible edges between vertexes to build out our graph.V^2
+# the actual DFS will visit each vertex and edge one time in the worst case scenario. V + E
+# max E = V(V-1) < V^2
+# Space: V + E
+
+# dictionary tracking stores the vertexes and edges V + E
+# visited set = V
+# stack = V
+def can_broadcast_shutdown(routers, source, destination, wireless_range) -> bool:
+    n = len(routers)
+    source_idx = destination_idx = -1
+    graph = defaultdict(list)
+    
+    # Build the graph
+    for i, (x1, y1) in enumerate(routers):
+        if (x1, y1) == source: 
+            source_idx = i    
+        if (x1, y1) == destination: 
+            destination_idx = i
+        
+        for j in range(i + 1, n):
+            x2, y2 = routers[j]
+            # Connect routers if they are within wireless range
+            if math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2) <= wireless_range:
+                graph[i].append(j)
+                graph[j].append(i)
+    
+    # If source or destination is not in the router list
+    if source_idx < 0 or destination_idx < 0:
+        return False
+    
+    # Depth-first search to check connectivity
+    stack = [source_idx]
+    visited = {source_idx}
+    
+    while stack:
+        current_router = stack.pop()
+        if current_router == destination_idx:
+            return True
+        
+        for neighbor in graph[current_router]:
+            if neighbor not in visited:
+                visited.add(neighbor)
+                stack.append(neighbor)
+    
+    return False
+
+# Example usage
+router_positions = [(0, 0), (0, 8), (0, 17), (11, 0)]
+wireless_range = 10
+source_position = (0, 0)
+destination_position = (11, 0)
+
+print(can_broadcast_shutdown(router_positions, source_position, destination_position, wireless_range))
+
+# Union Find
+# Time= V^2
+
+# still need to iterate over all possible edges between all vertices. V^2
+# Union Find with optimazation for path compression (parents[r]=parents[parents[r]])
+# Union Find with optimaztion for union by size. Compare weights and merge.
+# Union Find optimized = inverse ackerman => constant time as it should never really grow bigger than 5
+# Space= V
+
+# weights = V
+# parents = V
+def broadcast_shutdown_UF(routers, source, destination, wireless_range) -> bool:
+    n = len(routers)
+    parents = [i for i in range(n)]  # Initially, each router is its own parent
+    weights = [1] * n  # Weights array for rank-based union
+    source_idx = destination_idx = -1
+
+    # Find operation with path compression
+    def find(router):
+        while parents[router] != router:
+            parents[router] = parents[parents[router]]  # Path compression
+            router = parents[router]
+        return router
+
+    # Union operation with weight-based merging
+    def union(router1, router2):
+        root1, root2 = find(router1), find(router2)
+        if root1 == root2:
+            return  # Already in the same set
+        # Merge smaller tree under larger tree
+        if weights[root1] >= weights[root2]:
+            parents[root2] = root1
+            weights[root1] += weights[root2]
+        else:
+            parents[root1] = root2
+            weights[root2] += weights[root1]
+
+    # Build the union-find structure
+    for i, (x1, y1) in enumerate(routers):
+        if (x1, y1) == source:
+            source_idx = i
+        if (x1, y1) == destination:
+            destination_idx = i
+        for j in range(i + 1, n):
+            x2, y2 = routers[j]
+            # Connect routers if they are within wireless range
+            if math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2) <= wireless_range:
+                union(i, j)
+
+    # Check if source and destination are valid routers
+    if source_idx < 0 or destination_idx < 0:
+        return False
+
+    # Check if source and destination are in the same component
+    return find(source_idx) == find(destination_idx)
