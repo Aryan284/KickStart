@@ -4229,8 +4229,9 @@ print(better_binary_search(array,prefix))
 
 
 # Binary tree inorder nums is good or bad
-Time Complexity: O(n^2)
-Space Complexity: O(n)
+# Time Complexity: O(n^2)
+# Space Complexity: O(n)
+
 class TreeNode:
     def __init__(self, val=0, left=None, right=None):
         self.val = val
@@ -4291,6 +4292,7 @@ class Solution:
 
 
 # Merge Interval based on importance
+
 intervals = [[1,5],[2,11],[8,9]]
 imps = [1,0,1]
 res = []
@@ -4636,3 +4638,264 @@ def broadcast_shutdown_UF(routers, source, destination, wireless_range) -> bool:
 
     # Check if source and destination are in the same component
     return find(source_idx) == find(destination_idx)
+
+
+# query subsequence substract 1
+# Creating the events: O(q)
+# Sorting the events: O(q log q)
+# Processing the array and events: O(n + q)
+# Thus, the overall time complexity is:
+# O(qlogq+n+q)=O(qlogq+n)
+
+def is_possible(arr, queries):
+    left = 0
+    right = 1
+    merged = []
+
+    for q in queries:
+        merged.append((q[0], left))
+        merged.append((q[1], right))
+
+    merged.sort()
+
+    merged_idx = 0
+    val = 0  # running val for each i
+    for i in range(len(arr)):
+        while merged_idx < len(merged) and merged[merged_idx][0] == i and merged[merged_idx][1] == left:
+            val += 1
+            merged_idx += 1
+        if val < arr[i]:
+            return False
+        while merged_idx < len(merged) and merged[merged_idx][0] == i and merged[merged_idx][1] == right:
+            val -= 1
+            merged_idx += 1
+
+    return True
+    
+arr = [1, 2, 4]
+queries = [[0, 1], [1, 2], [0, 2], [1, 2]]
+print(is_possible(arr, queries))
+
+# O(n+q)
+def is_possible(arr, queries):
+    n = len(arr)
+    diff = [0] * (n + 1)  # Difference array of size n+1
+
+    # Process all queries using a difference array approach
+    for l, r in queries:
+        diff[l] += 1  # Increment the start of the query
+        if r + 1 < n:
+            diff[r + 1] -= 1  # Decrement the element after the end of the query
+
+    # Apply the difference array and check if we can make the array zero
+    current = 0  # Holds the number of decrements allowed at each index
+    for i in range(n):
+        current += diff[i]  # Apply the difference array to get the number of operations available at index i
+        if current < arr[i]:  # If available decrements are less than the element value, return False
+            return False
+
+    return True  # If we successfully process all elements, return True
+
+# Example usage
+arr = [1, 1, 5]
+queries = [[0, 1], [1, 2], [0, 2], [1, 2]]
+print(is_possible(arr, queries))  # Output: True
+
+
+# adjacent subarray [a+1, a+2, ..., a+k, b+1, b+2, ..., b+k]
+
+
+def get_the_valid_array(arr, k):
+    ans = []
+    l = 0
+    r = 0
+    n = len(arr)
+    
+    while r < n:
+        if r - l + 1 == k and arr[r - 1] == arr[r] - 1:
+            while l <= r:
+                ans.append(arr[l])
+                l += 1
+        
+        if len(ans) == 2 * k:
+            return ans
+        
+        if r != 0 and arr[r - 1] != arr[r] - 1:
+            l = r
+        
+        r += 1
+    
+    return ans
+
+if __name__ == "__main__":
+    nums = [2, 5, 7, 8, 9, 2, 3, 4, 3, 1]
+    k = 3
+    
+    print("kk" + str(get_the_valid_array(nums, k)))
+
+
+# testrun with steps 
+# O(V + E), where V is the number of unique steps, and E is the number of dependencies (edges). 
+# Constructing the graph and performing the topological sort both take linear 
+# time relative to the number of nodes and edges.
+
+from collections import defaultdict, deque
+
+def topological_sort(test1_steps, test2_steps):
+    # Create the graph and in-degree map
+    graph = defaultdict(list)
+    in_degree = defaultdict(int)
+
+    def add_edge(u, v):
+        if v not in graph[u]:
+            graph[u].append(v)
+            in_degree[v] += 1
+
+    # Process test1_steps
+    for i in range(len(test1_steps) - 1):
+        add_edge(test1_steps[i], test1_steps[i + 1])
+        if test1_steps[i] not in in_degree:
+            in_degree[test1_steps[i]] = 0
+
+    # Process test2_steps
+    for i in range(len(test2_steps) - 1):
+        add_edge(test2_steps[i], test2_steps[i + 1])
+        if test2_steps[i] not in in_degree:
+            in_degree[test2_steps[i]] = 0
+
+    # Perform topological sort using Kahn's algorithm (BFS)
+    queue = deque([node for node in in_degree if in_degree[node] == 0])
+    result = []
+    while queue:
+        node = queue.popleft()
+        result.append(node)
+        for neighbor in graph[node]:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    # If the result length is less than the number of unique steps, there's a cycle
+    if len(result) != len(in_degree):
+        return "Cycle detected or steps can't be ordered"
+
+    return result
+
+# Example
+test1_steps = ['A', 'B', 'C', 'D']
+test2_steps = ['X', 'B', 'D', 'C', 'Z']
+
+print(topological_sort(test1_steps, test2_steps))  # Output: ['X', 'B', 'A', 'C', 'Z']
+
+# Followup: if cycle can be possible
+
+def minimal_string(a: str, b: str) -> str:
+    n, m = len(a), len(b)
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    next = [[(0, 0)] * (m + 1) for _ in range(n + 1)]
+
+    for i in range(n - 1, -1, -1):
+        for j in range(m - 1, -1, -1):
+            dp[i][j] = dp[i][j + 1]
+            next[i][j] = (i, j + 1)
+
+            if dp[i + 1][j] > dp[i][j]:
+                dp[i][j] = dp[i + 1][j]
+                next[i][j] = (i + 1, j)
+
+            if a[i] == b[j] and dp[i][j] < (1 + dp[i + 1][j + 1]):
+                dp[i][j] = 1 + dp[i + 1][j + 1]
+                next[i][j] = (i + 1, j + 1)
+
+    min_string = ""
+    l, r = 0, 0
+
+    while l < n and r < m:
+        p = next[l][r]
+
+        if p[0] - l == 1 and p[1] - r == 1:
+            assert a[l] == b[r]
+            min_string += a[l]
+            l += 1
+            r += 1
+        elif p[0] - l == 1:
+            min_string += a[l]
+            l += 1
+        else:
+            min_string += b[r]
+            r += 1
+
+    while l < n:
+        min_string += a[l]
+        l += 1
+
+    while r < m:
+        min_string += b[r]
+        r += 1
+
+    return min_string
+a = ''
+b = ''
+print(minimal_string(a,b))
+
+
+# root vertex find in graph color
+
+from collections import deque
+
+# BFS function to check if the tree rooted at 'r' follows the correct color pattern
+def bfs(r, g, n, colors):
+    vis = [0] * n  # Visited array to mark which nodes have been processed
+    vis[r] = 1  # Mark the root as visited
+    q = deque([r])  # Initialize BFS queue with the root node
+    while q:
+        node = q.popleft()  # Dequeue a node for processing
+        for neighbor in g[node]:
+            if vis[neighbor]:
+                continue  # Skip already visited nodes
+            # Check if the color of the neighbor follows the expected pattern
+            if colors[neighbor] != (colors[node] + 1) % 3:
+                return False  # Return False if the pattern is violated
+            q.append(neighbor)  # Add the neighbor to the queue
+            vis[neighbor] = 1  # Mark the neighbor as visited
+    return True  # Return True if the tree follows the correct pattern
+
+def solve():
+    n = int(input())  # Number of nodes
+    g = [[] for _ in range(n)]  # Initialize the adjacency list for the graph
+    colors = [0] * n  # Initialize the colors array for each node
+    
+    # Reading edges and constructing the graph
+    for _ in range(n - 1):
+        u, v = map(int, input().split())
+        g[u].append(v)
+        g[v].append(u)
+    
+    # Reading the colors for each node
+    colors = list(map(int, input().split()))
+    
+    candidate = []  # List to store potential root candidates
+    
+    # Identify possible candidates for the root
+    for i in range(n):
+        if len(g[i]) > 3:  # If a node has more than 3 neighbors, it cannot be valid
+            return -1
+        if len(g[i]) == 1:  # Leaf nodes are valid candidates
+            if (colors[i] + 1) % 3 == colors[g[i][0]]:
+                candidate.append(i)
+        elif len(g[i]) == 2:  # Nodes with 2 neighbors are also valid if the colors match
+            if (colors[i] + 1) % 3 == colors[g[i][0]]:
+                candidate.append(i)
+                break  # We break here because only one valid candidate is enough
+    
+    if not candidate:
+        return -1  # Return -1 if no valid candidates are found
+    
+    # Perform BFS on the last candidate to check if the tree rooted at it is valid
+    r = candidate[-1]  # Select the last candidate as the root
+    if bfs(r, g, n, colors):
+        return r  # Return the candidate root if BFS validates the tree
+    
+    return -1  # Return -1 if no valid root was found
+
+if __name__ == "__main__":
+    print(solve())
