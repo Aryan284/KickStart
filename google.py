@@ -201,7 +201,8 @@ print(func(node))
 # E2: id2, p1, p4, p5
 # E3: id3, p6, p7, p8
 # in this example we should return {{idl, id2}, {id3}}
-
+# The time complexity for building the adjacency list is O(n * m).
+# The DFS part takes O(n * m), since in the worst case, every email has a connection with others
 from collections import defaultdict
 def func(accounts):
     def dfs(email):
@@ -335,9 +336,11 @@ for i in range(len(mp)):
     
 print(list(agg.values())) 
 
+
 # O(1) per enqueue
 # O(K) SC
 # Mean of data stream of last k lelment 
+
 from collections import deque
 class MKAverage:
 
@@ -1390,6 +1393,51 @@ strings = ['add(1,2)', 'mul(2e3, sub(4,2))', 'add(2.4, pow(2,4e4.5))']
 for s in strings:
     print(calculate(s))
 
+
+# Maths expression
+# TC: O(N)
+# SC:O(N)
+def solve(expression: str):
+    n = len(expression)
+    p = 0
+    st = []
+    while p < n:
+        # print(st, p)
+        if expression[p].isalpha():
+            st.append(expression[p:p+3])
+            p += 3
+        elif expression[p] in ", ":
+            p += 1
+        elif expression[p] == "(":
+            st.append("(")
+            p += 1
+        elif expression[p].isnumeric():
+            prev_p = p
+            p += 1
+            while p < n and (expression[p].isnumeric() or expression[p] == "."):
+                p += 1
+            st.append(float(expression[prev_p:p]))
+        else:
+            # a closing bracket
+            p += 1
+            v2 = st.pop()
+            v1 = st.pop()
+            st.pop()
+            operation = st.pop()
+            if operation == "add":
+                st.append(v1+v2)
+            elif operation == "mul":
+                st.append(v1*v2)
+            elif operation == "sub":
+                st.append(v1-v2)
+            elif operation == "div":
+                st.append(v1/v2)
+            elif operation == "pow":
+                st.append(v1**v2)
+
+
+    return st[-1]
+print(solve('add(5, sub(pow(7, 2), mul(3, 2)))'))
 
 # Robb bank graph (leet: Maximum Path Quality of a Graph)
 from collections import defaultdict, Counter
@@ -4132,6 +4180,36 @@ class Logger:
 # logger.should_print_message(15, "bar") # prints nothing
 # logger.should_print_message(21, "foo") # prints "foo"
 
+# Follow up uplicate messages as bugs. Don’t print a message if it’s repeated within the 10 seconds window(future or Past).
+from collections import defaultdict
+
+def solve(message, time):
+    window = 10
+    n = len(time)
+    mp = defaultdict(int)
+    ret = []
+    left = 0
+    
+    for i in range(n):
+        while time[i] - time[left] >= window:
+            if mp[message[left]] >= 0:
+                ret.append(message[left])
+            if mp[message[left]] == left or mp[message[left]] == -left:
+                del mp[message[left]]
+            left += 1
+        mp[message[i]] = -i if message[i] in mp else i
+    
+    while left < n:
+        if mp[message[left]] >= 0:
+            ret.append(message[left])
+        left += 1
+    
+    return ret
+# O(n), where n is the number of messages. We iterate through the list of messages once and perform constant time dictionary operations (lookups and updates).
+# O(m), where m is the number of unique messages. We store the last seen timestamp of each unique message in the dictionary.
+# Example usage
+print(solve(["Hello", "Hello", "Hey", "Hello"], [1, 2, 8, 12]))  # Hey Hello
+print(solve(["Hello", "Hello", "Hey", "Hello", "Hey", "Hello"], [1, 1, 8, 10, 18, 20]))  # Hey Hey Hello
 
 # 2. rate limitor that limits requests to K times for every 30 seconds.
 
@@ -4174,6 +4252,7 @@ logger = Logger(limit = 30, rate = 3)
 
 
 # elements in the array that start with the prefix value 
+
 # O(k log n), where n is the number of strings and k is the length of the prefix.
 def binary_search_leftmost(strings, prefix):
     start = 0
@@ -4899,3 +4978,957 @@ def solve():
 
 if __name__ == "__main__":
     print(solve())
+
+
+
+# contradiction between you and your friends
+# Graph Construction: O(k * n)
+# Topological Sorting: O(n + k * n) (since processing nodes and edges takes O(n) and O(k * n) respectively).
+
+from collections import defaultdict, deque
+
+def main():
+    tt = int(input("Enter number of test cases: "))
+    
+    for _ in range(tt):
+        n, k = map(int, input("Enter number of nodes and number of friends: ").split())
+        
+        adj = defaultdict(list)  # Adjacency list for the graph
+        indegree = defaultdict(int)  # Indegree list to track dependencies
+
+        # Read sequences from k friends
+        for _ in range(k):
+            sequence = list(map(int, input("Enter sequence: ").split()))
+            # Create edges based on the sequence
+            for i in range(len(sequence) - 1):
+                u = sequence[i]
+                v = sequence[i + 1]
+                adj[u].append(v)
+                indegree[v] += 1
+                if u not in indegree:
+                    indegree[u] = 0  # Ensure every node is in the indegree list
+        
+        # Find all nodes with 0 indegree (i.e., nodes without dependencies)
+        topo = deque([node for node in range(n) if indegree[node] == 0])
+        result = []  # List to store the topologically sorted result
+        
+        while topo:
+            current = topo.popleft()
+            result.append(current)
+            for neighbor in adj[current]:
+                indegree[neighbor] -= 1
+                if indegree[neighbor] == 0:
+                    topo.append(neighbor)
+        
+        # If the result contains all nodes, there's no contradiction
+        if len(result) == len(indegree):
+            print("yes")
+        else:
+            print("no")
+
+if __name__ == "__main__":
+    main()
+    
+# Friend 1: 1, 3, 4, 2
+# Friend 2: 3, 4, 9, 10
+# Friend 3: 11, 49, 13, 3
+# Friend 4: 19, 3, 13, 4
+
+
+
+# cut the edges in such a way that all the leaf nodes get disconnected
+
+class TreeNode:
+    def __init__(self, val=0, edgeCost=-1, left=None, right=None):
+        self.val = val  # node number
+        self.edgeCost = edgeCost  # cost of edge that connects this node with the parent, -1 for the rootNode
+        self.left = left
+        self.right = right
+
+    def is_leaf_node(self):
+        return self.left is None and self.right is None
+
+class Solution:
+    def min_cost(self, root):
+        if root is None:
+            return 0
+        if root.is_leaf_node():
+            return root.edgeCost
+        
+        left = 0
+        right = 0
+        
+        if root.left is not None:
+            left = self.min_cost(root.left)
+        if root.right is not None:
+            right = self.min_cost(root.right)
+        
+        # special case for handling root node
+        if root.edgeCost == -1:
+            # means root node.
+            return left + right
+        else:
+            return min(left + right, root.edgeCost)
+
+obj = Solution()
+root = TreeNode(6)
+root.left = TreeNode(4 ,5)
+root.right = TreeNode(2, 1)
+root.left.left = TreeNode(1, 10)
+
+print(obj.min_cost(root))
+
+
+
+# DND Meeting 
+
+def merge_meetings(meetings, dnd):
+    # Step 1: Sort meetings based on start time
+    meetings.sort(key=lambda x: x[0])
+
+    # Step 2: Merge overlapping meetings
+    merged_meetings = []
+    
+    for meeting in meetings:
+        if not merged_meetings or merged_meetings[-1][1] < meeting[0]:
+            # No overlap, add the meeting
+            merged_meetings.append(meeting)
+        else:
+            # There is an overlap, merge the meeting
+            merged_meetings[-1][1] = max(merged_meetings[-1][1], meeting[1])
+    
+    # Step 3: Handle the DND overlap
+    result = []
+    for meeting in merged_meetings:
+        # Case 1: Meeting completely before DND
+        if meeting[1] <= dnd[0]:
+            result.append(meeting)
+        # Case 2: Meeting completely after DND
+        elif meeting[0] >= dnd[1]:
+            result.append(meeting)
+        # Case 3: Meeting partially overlaps DND
+        else:
+            # Split the meeting if needed
+            if meeting[0] < dnd[0]:
+                result.append([meeting[0], dnd[0]])
+            if meeting[1] > dnd[1]:
+                result.append([dnd[1], meeting[1]])
+    
+    return result
+
+# Example Usage
+meetings = [[1, 4], [4, 9], [9, 12], [7, 10]]
+dnd = [3, 9]
+result = merge_meetings(meetings, dnd)
+print(result)
+
+
+
+# Max Size of Island
+
+class Node:
+    def __init__(self, val):
+        self.val = val
+        self.children = []
+
+def count_number_of_islands_in_tree(node, prev):
+    if node is None:
+        return 0
+    curr = 1 if node.val == 1 and prev == 0 else 0
+    for child in node.children:
+        curr += count_number_of_islands_in_tree(child, node.val)
+    return curr
+
+def max_size_of_an_island(node, maxi):
+    if node is None:
+        return 0
+    temp = 1 if node.val == 1 else 0
+    for child in node.children:
+        temp += count_number_of_islands_in_tree(child, maxi)
+    maxi[0] = max(maxi[0], temp)
+    return temp if node.val == 1 else 0
+
+if __name__ == "__main__":
+    root = Node(1)
+    child1 = Node(0)
+    child2 = Node(1)
+    child3 = Node(1)
+    root.children = [child1, child2, child3]
+
+    child11 = Node(1)
+    child12 = Node(0)
+    child1.children = [child11, child12]
+
+    child121 = Node(1)
+    child12.children = [child121]
+
+    child21 = Node(1)
+    child22 = Node(1)
+    child2.children = [child21, child22]
+
+    child221 = Node(0)
+    child22.children = [child221]
+
+    print(count_number_of_islands_in_tree(root, 0))
+
+    max_size_of_island = [0]
+    print(max_size_of_an_island(root, max_size_of_island))
+
+
+
+# weights of chocolates transforming this array into either an ascending or a descending order.
+# T: N^2
+# S: N^2
+def modifyArray(arr):
+    # determine minimum cost to make arr increasing or decreasing, flat being OK either way
+    n = len(arr)
+    a = [0] + arr
+    b = [0]+sorted(arr)
+    c = [0]+arr[::-1]
+    # determine the costs for getting to arr b from unsorted
+    dp = [[0 for x in range(n+1)] for y in range(n+1)]
+    for i in range(1, n+1):
+        minn = dp[i-1][1]
+        for j in range(1, n+1):
+            minn = min(minn,dp[i-1][j])
+            dp[i][j] = minn + abs(a[i]- b[j])
+    # determine the cost of getting to arr b from reversed arr, unsorted
+    dp2 = [[0 for x in range(n+1)] for y in range(n+1)]
+    for i in range(1, n+1):
+        minn = dp2[i-1][1]
+        for j in range(1, n+1):
+            minn = min(minn,dp2[i-1][j])
+            dp2[i][j] = minn + abs(c[i]- b[j])
+    minn =  dp[n][1];
+    # take the minimum of the two choices
+    for i in range(2, n+1):
+        minn = min(minn,dp[n][i],dp2[n][i])
+    return minn
+    
+a =  [20, 10, 10, 20]
+print(modifyArray(a))
+
+
+# rearranged into set(s) of five consecutive numbers
+# O(N log N) for sorting the array.
+# O(N) for counting the frequencies using Counter.
+# O(N) for iterating through the numbers and adjusting the Counter values with each check for subsequences of length k.
+
+from collections import Counter
+def isPossibleDivide(nums, k):
+        # Create a frequency count for all the numbers in nums
+        num_count = Counter(nums)
+      
+        # Loop over each number after sorting nums
+        for num in sorted(nums):
+            # If this number is still in the count dictionary
+            if num_count[num]:
+                # Attempt to create a consecutive sequence starting at this number
+                for x in range(num, num + k):
+                    # If any number required for the sequence does not exist, return False
+                    if num_count[x] == 0:
+                        return False
+                    # Decrease the count for this number since it's used in the sequence
+                    num_count[x] -= 1
+                    # If the count drops to zero, remove it from the dictionary
+                    if num_count[x] == 0:
+                        num_count.pop(x)
+                      
+        # If the entire loop completes without returning False, it means all sequences can be formed
+        return True
+
+
+#  2D keyboard, and a maximum jump distance jump_distance,
+# n * m accounts for starting the DFS from every cell on the board,
+# d^2 accounts for the number of valid neighboring positions within the jump distance in each DFS step,
+# k is the length of the word, representing the depth of the DFS recursion.
+# Thus, the time complexity is 
+# 𝑂(𝑛∗𝑚∗𝑑2∗𝑘)O(n∗m∗d 2∗k).
+
+def word_can_be_typed(board, word, jump_distance):
+    if not board or not word:
+        return False
+
+    rows, cols = len(board), len(board[0])
+
+    def dfs(x, y, word_index, visited):
+        # If we've found the entire word
+        if word_index == len(word):
+            return True
+        # Check boundaries and character match
+        if x < 0 or x >= rows or y < 0 or y >= cols or board[x][y] != word[word_index] or (x, y) in visited:
+            return False
+        
+        # Mark the cell as visited
+        visited.add((x, y))
+        
+        # Explore neighbors within jump distance
+        for dx in range(-jump_distance, jump_distance + 1):
+            for dy in range(-jump_distance, jump_distance + 1):
+                if abs(dx) + abs(dy) <= jump_distance:  # Ensure within jump distance
+                    if dfs(x + dx, y + dy, word_index + 1, visited):
+                        return True
+        
+        # Unmark the cell (backtrack)
+        visited.remove((x, y))
+        return False
+
+    # Start DFS from each cell
+    for i in range(rows):
+        for j in range(cols):
+            if board[i][j] == word[0] and dfs(i, j, 0, set()):
+                return True
+
+    return False
+
+# Test cases
+keyboard = [['Q', 'X', 'P', 'L', 'E'],
+            ['W', 'A', 'C', 'I', 'N']]
+jump_distance = 2
+
+print(word_can_be_typed(keyboard, "PENCIL", jump_distance))  # True
+print(word_can_be_typed(keyboard, "PACE", jump_distance))    # 
+
+
+
+
+
+
+
+class TreeNode:
+    def __init__(self, val=0, left=None, right=None):
+        self.val = val
+        self.left = left
+        self.right = right
+
+def sum_of_nodes(root):
+    # Base case: if the node is None, return 0
+    if root is None:
+        return 0
+    # Recursive case: sum the value of the current node with the sums of left and right subtrees
+    return root.val + sum_of_nodes(root.left) + sum_of_nodes(root.right)
+
+# Example usage:
+# Constructing a binary tree:
+#        5
+#       / \
+#      3   8
+#     / \   \
+#    2   4   10
+# Total sum: 5 + (9 from left) + (18 from right) = 32.
+root = TreeNode(5)
+root.left = TreeNode(3)
+root.right = TreeNode(8)
+root.left.left = TreeNode(2)
+root.left.right = TreeNode(4)
+root.right.right = TreeNode(10)
+
+# Call the function and print the result
+print(sum_of_nodes(root))  # Output: 32
+
+
+
+#  farthest node in graph minimized
+
+from collections import defaultdict
+from typing import List
+
+
+def min_dist_to_furthest_node(n: int, edges: List[List[int]]) -> int:
+    """
+    Time  : O(N)
+    Space : O(N),
+    """
+
+    # SETUP THE GRAPH
+    g = defaultdict(list)
+
+    # SETUP A SET OF NODES WITH IN-DEGREE = 0
+    id0 = set([i for i in range(1, n + 1)])
+
+    # COUNT THE IN-DEGREE OF EACH NODE
+    id = [0] * (n + 1)
+
+    # TRACK THE DIST
+    dist = 0
+
+    for e in edges:
+        g[e[0]].append(e[1])
+        g[e[1]].append(e[0])
+        id[e[0]] += 1
+        id[e[1]] += 1
+        if id[e[0]] > 1 and e[0] in id0: id0.remove(e[0])
+        if id[e[1]] > 1 and e[1] in id0: id0.remove(e[1])
+
+    # LOOP TILL WE ONLY HAVE 0 - 1 NODE WITH ID = 0
+    while len(id0) > 1:
+
+        # TRACK THE NEW ID0
+        new_id0 = set()
+
+        # REMOVE ALL LEAVES AND THEIR EDGES
+        for leaf in id0:
+            for nb in g.get(leaf):
+                id[nb] -= 1
+                if id[nb] == 1: new_id0.add(nb)
+
+        id0 = new_id0
+        dist += 1
+
+    return dist
+
+
+# amenities
+# Time complexity: O(b * n), where b is the number of blocks and n is the average number of amenities in a block.
+# Space complexity: O(a), where a is the number of amenities.
+
+from typing import Set, List
+
+def pick_block(amenities: Set[str], blocks: List[Set[str]]) -> int:
+    block = 0
+    min_len = float('inf')
+    window = {}
+    lo = 0
+
+    for hi in range(len(blocks)):
+        add_block_to_window(blocks[hi], amenities, window)
+
+        while len(window) == len(amenities):
+            length = hi - lo
+
+            if length < min_len:
+                min_len = length
+                block = (lo + hi) // 2
+
+            remove_block_from_window(blocks[lo], amenities, window)
+            lo += 1
+
+    return block
+
+def add_block_to_window(block: Set[str], amenities: Set[str], window: dict) -> None:
+    for amenity in block:
+        if amenity in amenities:
+            window[amenity] = window.get(amenity, 0) + 1
+
+def remove_block_from_window(block: Set[str], amenities: Set[str], window: dict) -> None:
+    for amenity in block:
+        if amenity in amenities:
+            window[amenity] -= 1
+            if window[amenity] == 0:
+                del window[amenity]
+
+if __name__ == "__main__":
+    amenities = {"school", "grocery"}
+    
+    blocks = []
+    block1 = {"restaurant", "grocery"}
+    blocks.append(block1)
+    block2 = {"movie theater"}
+    blocks.append(block2)
+    block3 = {"school"}
+    blocks.append(block3)
+    block4 = {}
+    blocks.append(block4)
+    block5 = {"school"}
+    blocks.append(block5)
+
+    result = pick_block(amenities, blocks)
+    print("result!", result)
+
+
+
+# K friends location , M restaurants location
+from collections import deque, defaultdict
+import sys
+
+def bfs(start, dist, graph):
+    q = deque([start])
+    dist[start] = 0
+
+    while q:
+        node = q.popleft()
+
+        for neighbor in graph[node]:
+            if dist[neighbor] == sys.maxsize:  # equivalent to INT_MAX in C++
+                dist[neighbor] = dist[node] + 1
+                q.append(neighbor)
+
+def find_meeting_restaurant(num_nodes, friends, restaurants, edges):
+    graph = defaultdict(list)
+    
+    for edge in edges:
+        graph[edge[0]].append(edge[1])
+        graph[edge[1]].append(edge[0])
+
+    maxDist = [-1] * (num_nodes + 1)
+    restaurant_set = set(restaurants)
+
+    for friend_node in friends:
+        dist = [sys.maxsize] * (num_nodes + 1)
+        bfs(friend_node, dist, graph)
+
+        for rest in restaurants:
+            if dist[rest] == sys.maxsize:
+                continue
+            maxDist[rest] = max(maxDist[rest], dist[rest])
+
+    restWithMinDistance = -1
+    minDistance = sys.maxsize
+
+    for rest in restaurants:
+        if maxDist[rest] == -1:
+            continue
+        if minDistance > maxDist[rest]:
+            minDistance = maxDist[rest]
+            restWithMinDistance = rest
+
+    if minDistance == sys.maxsize:
+        print("There is no restaurant where all friends can reach")
+    else:
+        print(f"All friends can reach restaurant number (or node): {restWithMinDistance} in {minDistance} units of time")
+
+# Example usage
+if __name__ == "__main__":
+    friends = [1, 2]
+    restaurants = [5]
+    edges = [(1, 3), (2, 3)]
+    
+    find_meeting_restaurant(3, friends, restaurants, edges)
+
+# Same question
+
+from collections import deque, defaultdict
+
+def multi_source_bfs(friends, graph, n):
+    distances = [0] * n  # Total distance to each node from all friends
+    count = [0] * n  # Count of how many friends have reached each node
+    queue = deque()
+    
+    # Initialize BFS queue with all friends, and mark their distance as 0
+    for friend in friends:
+        queue.append((friend, 0))  # (node, distance)
+        count[friend] += 1
+
+    # Perform multi-source BFS
+    while queue:
+        node, dist = queue.popleft()
+        
+        # Visit all neighbors
+        for neighbor in graph[node]:
+            if count[neighbor] < len(friends):  # If not all friends have reached this node
+                # Update the total distance and increment count of visits
+                distances[neighbor] += dist + 1
+                count[neighbor] += 1
+                
+                # Only enqueue the neighbor if not all friends have visited it yet
+                if count[neighbor] == 1:
+                    queue.append((neighbor, dist + 1))
+    
+    return distances
+
+def min_time_to_meet(friends, cafes, graph):
+    n = len(graph)  # Total number of nodes
+    
+    # Perform multi-source BFS from all friends
+    total_distances = multi_source_bfs(friends, graph, n)
+    
+    # Now find the cafe with the minimum total distance
+    min_time = float('inf')
+    best_cafe = -1
+    
+    for cafe in cafes:
+        if total_distances[cafe] < min_time:
+            min_time = total_distances[cafe]
+            best_cafe = cafe
+    
+    return best_cafe, min_time
+
+# Example usage:
+# Let's say we have 6 nodes (0 to 5), and node 0 is the home of friend 1, node 2 is the home of friend 2.
+# Nodes 3 and 4 are cafes. We are given the following bidirectional edges.
+graph = defaultdict(list)
+graph[0] = [1, 2]
+graph[1] = [0, 3]
+graph[2] = [0, 4]
+graph[3] = [1, 5]
+graph[4] = [2, 5]
+graph[5] = [3, 4]
+
+friends = [0, 2]  # Friends are at node 0 and 2
+cafes = [3, 4]    # Cafes are at node 3 and 4
+
+best_cafe, min_time = min_time_to_meet(friends, cafes, graph)
+print(f"Best Cafe: {best_cafe}, Min Time: {min_time}")
+
+
+
+# O(row*col)
+
+# 0 means an empty cell, 1 means a wall, and 2 means an exit. Generate a sequence of instructions (U, D, L, R)
+
+from collections import deque
+
+def generate_directions(matrix):
+    rows = len(matrix)
+    cols = len(matrix[0])
+    directions = [('U', -1, 0), ('D', 1, 0), ('L', 0, -1), ('R', 0, 1)]  # Possible movements and their directions
+    direction_map = [[None for _ in range(cols)] for _ in range(rows)]  # To store directions for each cell
+    queue = deque()  # Queue for BFS
+    
+    # Locate the exit (value 2) and initialize BFS
+    for i in range(rows):
+        for j in range(cols):
+            if matrix[i][j] == 2:
+                queue.append((i, j))
+                direction_map[i][j] = ''  # Exit does not need a direction
+
+    # BFS to compute directions from the exit
+    while queue:
+        x, y = queue.popleft()
+
+        for dir, dx, dy in directions:
+            new_x = x + dx
+            new_y = y + dy
+
+            # Check if new coordinates are within bounds and are not walls (value 1)
+            if 0 <= new_x < rows and 0 <= new_y < cols and matrix[new_x][new_y] == 0 and direction_map[new_x][new_y] is None:
+                direction_map[new_x][new_y] = dir  # Assign direction
+                queue.append((new_x, new_y))  # Add the new position to the queue
+
+    return direction_map
+
+# Example usage
+matrix = [
+    [1, 0, 1],
+    [0, 2, 0],
+    [1, 0, 1]
+]
+
+result = generate_directions(matrix)
+
+print(result)
+
+
+
+# sparse bit array A of size M stored in a database
+#  Iterative
+#     TC: O(k*log(n))
+#     SC: O(1)
+
+def query(l, r, arr):
+    for i in range(l, r + 1):
+        if arr[i] == 1:
+            return 1
+    return 0
+
+
+def findAllOnes(arr):
+    n = len(arr)
+    result = []
+    i = 0
+    while i < n and query(i, n - 1, arr):
+        low, high = i, n - 1
+        currOnePos = -1
+        while low <= high:
+            mid = low + (high - low) // 2
+            if query(low, mid, arr):
+                high = mid - 1
+                currOnePos = mid
+            else:
+                low = mid + 1
+        result.append(currOnePos)
+        i = currOnePos + 1
+    return result
+
+bitsArr = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]
+onesPosition = findAllOnes(bitsArr)
+
+# Recursive
+def query(l, r, arr):
+    for i in range(l, r + 1):
+        if arr[i] == 1:
+            return 1
+    return 0
+
+def findFirstOne(low, high, arr):
+    if low > high:
+        return -1
+    mid = low + (high - low) // 2
+    if query(low, mid, arr):
+        if low == mid or not query(low, mid - 1, arr):
+            return mid
+        else:
+            return findFirstOne(low, mid - 1, arr)
+    else:
+        return findFirstOne(mid + 1, high, arr)
+
+def findAllOnesRecursive(i, n, arr, result):
+    if i >= n or not query(i, n - 1, arr):
+        return
+    firstOnePos = findFirstOne(i, n - 1, arr)
+    result.append(firstOnePos)
+    findAllOnesRecursive(firstOnePos + 1, n, arr, result)
+
+
+# restricted path find the shortest path
+
+# Graph Construction: O(E), where E is the number of edges.
+# BFS: O(V + E), where V is the number of vertices and E is the number of edges. Each vertex and edge is processed at most once.
+# Total Time Complexity: O(V + E).
+# Space Complexity:
+# The space required for the graph adjacency list is O(V + E).
+# The visited set and the queue can each hold up to O(V) elements, leading to an overall space complexity of O(V + E).
+
+from collections import deque, defaultdict
+
+def find_shortest_path(edges, start, end, restricted):
+    # Step 1: Create the graph as an adjacency list
+    graph = defaultdict(list)
+    for u, v in edges:
+        graph[u].append(v)
+        graph[v].append(u)
+
+    # Step 2: Initialize BFS queue and visited set
+    queue = deque([(start, [start])])  # Queue stores tuples (node, path to reach that node)
+    visited = set([start])  # Start node is already visited
+
+    # Step 3: Perform BFS
+    while queue:
+        node, path = queue.popleft()
+
+        # Step 4: If we reach the end node, return the path
+        if node == end:
+            return path
+
+        # Explore neighbors
+        for neighbor in graph[node]:
+            if neighbor not in visited and neighbor not in restricted:
+                visited.add(neighbor)
+                queue.append((neighbor, path + [neighbor]))
+
+    # If no path is found
+    return []
+
+# Example usage
+edges = [{1, 2}, {2, 3}, {1, 4}, {4, 5}, {3, 5}]
+start = 1
+end = 3
+restricted = {2}  # Node 2 is restricted
+
+# Find the shortest path from start to end, avoiding restricted nodes
+result = find_shortest_path(edges, start, end, restricted)
+print("Shortest path:", result)
+
+# Follow up: special kind of minimum pass to cross the restricted node
+from collections import deque, defaultdict
+
+def min_passes_to_reach_end(edges, start, end, restricted):
+    # Step 1: Create the graph as an adjacency list
+    graph = defaultdict(list)
+    for u, v in edges:
+        graph[u].append(v)
+        graph[v].append(u)
+
+    # Step 2: Initialize BFS queue and visited set
+    queue = deque([(start, 0)])  # Queue stores tuples (node, number of passes)
+    visited = {}  # Dictionary stores the minimum number of passes for each node
+
+    visited[start] = 0  # We start with 0 passes from the start node
+
+    # Step 3: Perform BFS
+    while queue:
+        node, passes = queue.popleft()
+
+        # Step 4: If we reach the end node, return the number of passes used
+        if node == end:
+            return passes
+
+        # Explore neighbors
+        for neighbor in graph[node]:
+            # Check if we are crossing a restricted node
+            new_passes = passes + 1 if neighbor in restricted else passes
+
+            # Only explore if we haven't visited this neighbor with fewer or equal passes
+            if neighbor not in visited or new_passes < visited[neighbor]:
+                visited[neighbor] = new_passes
+                queue.append((neighbor, new_passes))
+
+    # If no path is found, return -1 (though it's assumed there is always a valid path with enough passes)
+    return -1
+
+# Example usage
+edges = [{1, 2}, {1,4}, {2, 3}, {4, 5}, {3, 5}, {3,6}]
+start = 1
+end = 5
+restricted = {2, 4}  # Node 2 is restricted
+
+# Find the minimum number of passes needed to reach the end
+result = min_passes_to_reach_end(edges, start, end, restricted)
+print("Minimum number of passes:", result)
+
+
+
+
+# given URL largest files inside the folder
+# Heap
+# O(n logk) and Space Complexity is O(k).
+import heapq
+
+class helper:
+    @staticmethod
+    def sz(uri):
+        # Mock implementation of file size lookup.
+        # Returns size for files, or -1 if it's a folder
+        # Replace this with the actual implementation.
+        file_sizes = {
+            "/google/storage/var/music.mp4": 1008372,
+            "/google/storage/var/www/img.jpg": 313236,
+            "/google/storage/var/log/voice.mp3": 253964,
+            "/google/storage/var/lib.txt": 192544,
+            "/google/storage/var/spool.mp4": 152628,
+            "/google/storage/var/spool/squid/noice.png": 152508,
+            "/google/storage/var/spool/squid/00.txt": 136524,
+            "/google/storage/var/log/mrtg.log": 95736,
+            "/google/storage/var/log/squid/color.txt": 74688,
+            "/google/storage/var/cache.txt": 62544
+        }
+        return file_sizes.get(uri, -1)
+    
+    @staticmethod
+    def list(uri):
+        # Mock implementation of folder listing.
+        # Returns a list of subfolders and files in the directory.
+        # Replace this with the actual implementation.
+        directory_listing = {
+            "/google/storage/var": ["/google/storage/var/music.mp4", "/google/storage/var/www", "/google/storage/var/log", 
+                                    "/google/storage/var/lib.txt", "/google/storage/var/spool.mp4", "/google/storage/var/cache.txt"],
+
+            "/google/storage/var/www": ["/google/storage/var/www/img.jpg"],
+            "/google/storage/var/log": ["/google/storage/var/log/voice.mp3", "/google/storage/var/log/mrtg.log", "/google/storage/var/log/squid"],
+            "/google/storage/var/spool": ["/google/storage/var/spool/squid/noice.png", "/google/storage/var/spool/squid/00.txt"],
+            "/google/storage/var/log/squid": ["/google/storage/var/log/squid/color.txt"],
+            "/google/storage/var/spool/squid": ["/google/storage/var/spool/squid/noice.png", "/google/storage/var/spool/squid/00.txt"]
+        }
+        return directory_listing.get(uri, [])
+
+def dfs(uri, heap):
+    # Get the list of items in the current directory
+    items = helper.list(uri)
+    
+    if items is None:
+        return  # This means it's a file, so we should skip
+
+    for item in items:
+        size = helper.sz(item)
+        
+        if size != -1:  # It's a file
+            if len(heap) < 10:
+                heapq.heappush(heap, (size, item))
+            else:
+                heapq.heappushpop(heap, (size, item))
+        else:  # It's a directory
+            dfs(item, heap)
+
+def get_top_10_largest_files(start_uri):
+    # Min-heap to store the 10 largest files
+    heap = []
+    
+    # Start DFS traversal
+    dfs(start_uri, heap)
+    
+    # Extract the top 10 files from the heap and sort by size in descending order
+    return sorted(heap, key=lambda x: -x[0])
+
+# Example usage
+start_uri = "/google/storage/var"
+top_files = get_top_10_largest_files(start_uri)
+
+# Print the results
+for size, uri in top_files:
+    print(f"{size} {uri}")
+
+
+# Optimised
+
+# TC: The average time complexity for Quickselect is O(F) for finding the k-th largest element.
+# SC: In-place partitioning and recursive calls give a space complexity of 
+
+# O(1) for the array and O(logF) for the recursion stack, making the total space complexity 
+
+import random
+
+def partition(arr, left, right, pivot_index):
+    """
+    Partitions the array around the pivot.
+    Elements larger than the pivot go to the left,
+    and elements smaller go to the right.
+    """
+    pivot_value = arr[pivot_index][0]  # Use the file size for comparison
+    # Move pivot to end
+    arr[pivot_index], arr[right] = arr[right], arr[pivot_index]
+    store_index = left
+    
+    # Move all larger elements to the left
+    for i in range(left, right):
+        if arr[i][0] > pivot_value:  # We want to find the largest files
+            arr[store_index], arr[i] = arr[i], arr[store_index]
+            store_index += 1
+    
+    # Move pivot to its final place
+    arr[right], arr[store_index] = arr[store_index], arr[right]
+    
+    return store_index
+
+def quickselect(arr, left, right, k):
+    """
+    Returns the k largest elements in arr using Quickselect.
+    """
+    if left == right:  # If the list contains only one element
+        return arr[left:right+1]
+    
+    # Select a random pivot index
+    pivot_index = random.randint(left, right)
+    
+    # Find the pivot position in a sorted list
+    pivot_index = partition(arr, left, right, pivot_index)
+
+    # If pivot is at the k-th position, we've found our top k
+    if pivot_index == k:
+        return arr[:k+1]
+    elif pivot_index > k:
+        # Recurse on the left side
+        return quickselect(arr, left, pivot_index - 1, k)
+    else:
+        # Recurse on the right side
+        return quickselect(arr, pivot_index + 1, right, k)
+
+
+# Mock example: list of (file_size, file_path)
+files = [
+    (1008372, "/google/storage/var/music.mp4"),
+    (313236, "/google/storage/var/www/img.jpg"),
+    (253964, "/google/storage/var/log/voice.mp3"),
+    (192544, "/google/storage/var/lib.txt"),
+    (152628, "/google/storage/var/spool.mp4"),
+    (152508, "/google/storage/var/spool/squid/noice.png"),
+    (136524, "/google/storage/var/spool/squid/00.txt"),
+    (95736, "/google/storage/var/log/mrtg.log"),
+    (74688, "/google/storage/var/log/squid/color.txt"),
+    (62544, "/google/storage/var/cache.txt")
+]
+
+n = 10  # Find the top 5 largest file9
+
+# Ensure n doesn't exceed the number of files
+if n <= len(files):
+    # Find the top n largest files using Quickselect
+    largest_files = quickselect(files, 0, len(files) - 1, n - 1)
+    
+    # Sort the top n largest files in descending order
+    largest_files = sorted(largest_files, key=lambda x: -x[0])
+    
+    # Print the results
+    for size, path in largest_files:
+        print(f"{size} {path}")
+else:
+    print("Not enough files!")
