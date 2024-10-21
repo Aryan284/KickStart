@@ -5932,3 +5932,62 @@ if n <= len(files):
         print(f"{size} {path}")
 else:
     print("Not enough files!")
+
+
+
+# knockout match exact ranks of any player
+
+# Iterating over all nodes takes O(N)
+# O(n), and checking the neighbors of each node (i.e., processing all edges) takes O(m), where 
+# n is the number of players and 
+# m is the number of matches.
+# Time complexity: O(n+m).
+# from collections import deque, defaultdict
+# SC:
+# Graph storage: 
+# O(n+m) for storing the adjacency list and the in-degree array.
+# Queue and auxiliary data structures: 
+# O(n) for the queue and rank order list.
+
+def find_exact_ranks(n, matches):
+    graph = defaultdict(list)
+    indegree = [0] * (n + 1)
+    
+    # Build the graph and indegree array
+    for u, v in matches:
+        graph[u].append(v)
+        indegree[v] += 1
+
+    # Kahn's algorithm for topological sort
+    queue = deque()
+    for i in range(1, n + 1):
+        if indegree[i] == 0:
+            queue.append(i)
+    
+    rank_order = []
+    while queue:
+        if len(queue) > 1:
+            print(f"Tie found, cannot determine exact ranks for all players")
+            break  # There is a tie, so we stop determining exact ranks
+        
+        node = queue.popleft()
+        rank_order.append(node)
+        
+        for neighbor in graph[node]:
+            indegree[neighbor] -= 1
+            if indegree[neighbor] == 0:
+                queue.append(neighbor)
+    
+    # Check if all nodes are ranked (i.e., no cycles and single component)
+    if len(rank_order) != n:
+        print("Not all players are connected or cycle detected.")
+    
+    return rank_order
+
+
+# Test the function
+n = 6
+matches = [(1, 2), (2, 3), (2, 6), (3, 4), (4, 5)]
+
+ranks = find_exact_ranks(n, matches)
+print(f"Players with determined ranks: {ranks}")
