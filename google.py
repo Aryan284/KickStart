@@ -2848,7 +2848,7 @@ if __name__ == "__main__":
         print(is_balance(s))
 
 
-# Design DS for  restaurant customers waitlsit
+# Design DS for  restaurant waitlist customers
 
 from collections import defaultdict, OrderedDict
 
@@ -5991,3 +5991,219 @@ matches = [(1, 2), (2, 3), (2, 6), (3, 4), (4, 5)]
 
 ranks = find_exact_ranks(n, matches)
 print(f"Players with determined ranks: {ranks}")
+
+
+# You are tasked with writing a sequence of positive integers starting from 1. However, you have a constraint: 
+# for each digit (0-9), you can press its corresponding key a maximum of n times, where n can be as large as a 64-bit integer. 
+# You need to determine the last number you can write before running out of allowed presses for any digit.
+
+import sys
+
+power_of_ten = [0] * 19
+
+def initialize_powers_of_ten():
+    power_of_ten[0] = 1
+    for index in range(1, 19):
+        power_of_ten[index] = power_of_ten[index - 1] * 10
+
+def count_ones_in_range(number):
+    count = 0
+    left_part, right_part = number, 0
+
+    index = 0
+    while left_part > 0:
+        current_digit = left_part % 10
+        left_part //= 10
+
+        if current_digit == 1:
+            count += left_part * power_of_ten[index] + right_part + 1
+        else:
+            count += (left_part + (current_digit != 0)) * power_of_ten[index]
+
+        right_part += power_of_ten[index] * current_digit
+        index += 1
+
+    return count
+
+def solve(target):
+    initialize_powers_of_ten()
+
+    lower_bound = 1
+    upper_bound = 1000000000000000000
+
+    while upper_bound - lower_bound > 1:
+        mid_point = lower_bound + (upper_bound - lower_bound) // 2
+        if count_ones_in_range(mid_point) <= target:
+            lower_bound = mid_point
+        else:
+            upper_bound = mid_point
+
+    return lower_bound
+
+def main():
+    test_values = [5, 7, 4, 6, 9]
+    for value in test_values:
+        result = solve(value)
+        print(f"For = {value}, res = {result}")
+
+if __name__ == "__main__":
+    main()
+
+
+
+# erase any number of characters from the scroll
+
+import sys
+
+MOD = 10**9 + 7
+maxN = 5 * 10**5 + 5
+
+N = 0
+tot = 0
+dp = [0] * 26
+S = "aybabtu"
+
+N = len(S)
+for i in range(N):
+    c = ord(S[i]) - ord('a')
+    dp[c] += 1
+    for j in range(26):
+        if j != c:
+            dp[c] = (dp[c] + dp[j]) % MOD
+
+for i in range(26):
+    tot = (tot + dp[i]) % MOD
+
+print(tot)
+
+
+
+
+# switch toggle
+from collections import defaultdict, deque
+import math
+
+def minOperations(bulbs: list[int]) -> int:
+    N = len(bulbs)
+    bulbs.sort()
+    for i in reversed(range(N)): bulbs[i] -= bulbs[0] # canonicalize
+
+    # convert to toggles: converts range updates to 2 point updates
+    toggles = [0]
+    for i in range(1, len(bulbs)):
+        if bulbs[i]-bulbs[i-1] > 1:
+            toggles.append(bulbs[i-1]+1) # falling edge 1->0
+            toggles.append(bulbs[i]) # rising edge 0->1
+    toggles.append(bulbs[-1]+1)
+
+    T = len(toggles)
+    # get primes for later with Sieve of Eratosthenes
+    primes = []
+    isPrime = [True]*(toggles[-1]+1)
+    for n in range(3, len(isPrime), 2):
+        if isPrime[n]:
+            primes.append(n)
+            for m in range(n**2, len(isPrime), 2*n): isPrime[m]=False
+
+    p2v = {p: i for i, p in enumerate(toggles)} # O(1) toggle pos -> idx
+
+    # format:
+    #    node 0 is the fake source, T+1 is the fake target
+    #    nodes 1..T are the OG nodes we want to maximize matching on
+    adj = [[] for _ in range(T+1)]
+    cap = defaultdict(lambda: defaultdict(int)) # cap[u][v] is cap. of u->v
+    
+    for u in range(T):
+        tu = toggles[u]
+        for p in primes:
+            tv = tu+p
+            if tv > toggles[-1]: break
+            if tv in p2v:
+                v = p2v[tv]
+                adj[u+1].append(v+1)
+                adj[v+1].append(u+1)
+                cap[u+1][v+1] = 1
+
+        # source -> evens -> odds -> target
+        if toggles[u] % 2:
+            adj[u+1].append(T)
+            cap[u+1][T] = 1
+        else:
+            adj[0].append(u+1)
+            cap[0][u+1] = 1
+            
+    # Dinic's Algorithm for max flow, asymptotically optimal (allegedly)
+    dist = [0]*(T+1)
+    ptr = [0]*(T+1)
+
+    def setDists() -> int:
+        """Resets dists and finds 0-v distances en route to v=T"""
+        for i in range(len(dist)): dist[i] = math.inf
+        dist[0] = 0
+        q = deque([0])
+        while q:
+            for _ in range(len(q)):
+                u = q.popleft()
+                for v in adj[u]:
+                    if cap[u][v] and dist[u]+1 < dist[v]:
+                        dist[v] = dist[u]+1
+                        q.append(v)
+
+            if dist[T] < math.inf: return dist[T]
+
+        return dist[T] # still infinity :(
+
+    def findFlow(u: int, c: int) -> int:
+        """Finds flow from u to T if possible, and removes any discovered flow from cap en route"""
+
+        if u == T: return c
+            
+        found = 0
+        while ptr[u] < len(adj[u]) and c:
+            v = adj[u][ptr[u]]
+            if cap[u][v] and dist[v] == dist[u] + 1:
+                f = findFlow(v, min(c, cap[u][v]))
+                c -= f
+                found += f
+                cap[u][v] -= f
+                cap[v][u] += f
+                
+            ptr[u] += 1 # ptr "saves our place" so as we do multiple DFS searches we don't repeat paths
+
+        return found
+
+    # standard Dinic's flow loop: exhaust all flow at current level d, can prove next min dist is always larger (or no path exists)
+    k = 0
+    while True:
+        d = setDists()
+        if d == math.inf: break # all 0-T paths exhausted, no more flow!
+
+        for i in range(len(ptr)): ptr[i] = 0
+        while (f := findFlow(0, T)): k += f
+
+    # M0 is M_even, M1 is M_odd
+    M1 = sum(t % 2 for t in toggles)
+    M0 = T-M1
+    return k + ((M0-k)//2 + (M1-k)//2)*2 + ((M0-k)%2)*3
+    
+print(minOperations([1,2,3,4,5,6,7,8,9]))
+
+
+
+# Game Theory candies basket
+# TC: In the worst-case scenario, lv can be approximated to run in 
+# O(log(v/m)) for each basket, though actual recursion depth varies depending on the values of v and m.
+# Therefore, the total complexity of this part across all baskets is approximately O(Nlog(V/M))
+
+def lv(v, m):
+    q, r = divmod(v, m)
+    return q if q * r == 0 else lv(v - q - 1, m)
+
+def solve(candies, limit):
+    x = 0
+    for v, m in zip(candies, limit):
+        x ^= lv(v, m)
+    return "Alice" if x > 0 else "Bob"
+
+# Test case
+print(solve([(7, 3), (4, 2), (6, 5)])) 
