@@ -6207,3 +6207,139 @@ def solve(candies, limit):
 
 # Test case
 print(solve([(7, 3), (4, 2), (6, 5)])) 
+
+
+
+
+# minimum possible diameter after applying at most k operations.
+
+#  TC: O(k * n^2), where n is the number of nodes, and k is the maximum number of leaves you are allowed to remove.
+
+# Input: n (number of nodes), k (maximum number of leaves to remove)
+n = 5
+k = 1
+# Graph initialization
+G = defaultdict(list)
+degree = [0] * n       # Degree of each node
+deleted = [0] * n      # Track deleted nodes (1 if deleted, else 0)
+seen = [0] * n         # Track seen nodes during DFS
+distnce = [-1] * n     # Distance array for BFS
+diameter = 0           # Diameter of the tree
+
+# Function to perform DFS and update distances from a starting node
+def getDist(node, dist):
+    seen[node] = 1
+    for neighbor in G[node]:
+        if not seen[neighbor] and not deleted[neighbor]:
+            getDist(neighbor, dist + 1)
+    distnce[node] = dist
+
+# Function to compute the diameter of the current tree
+def getDiameter():
+    global distnce, seen
+    
+    # Step 1: Find the farthest node from any non-deleted node
+    distnce = [-1] * n
+    seen = [0] * n
+    for i in range(n):
+        if not deleted[i]:
+            getDist(i, 0)
+            break
+    
+    # Step 2: Identify the farthest node and its distance
+    max_dist = -1
+    max_index = -1
+    for i in range(n):
+        if distnce[i] > max_dist:
+            max_dist = distnce[i]
+            max_index = i
+    
+    # Step 3: Find the diameter by computing distances from the farthest node
+    distnce = [-1] * n
+    seen = [0] * n
+    getDist(max_index, 0)
+    return max(distnce)
+
+# Function to count nodes at the current diameter distance
+def countDiameterNodes(node):
+    global distnce, seen
+    distnce = [0] * n
+    seen = [0] * n
+    getDist(node, 0)
+    
+    # Count nodes that are at the maximum diameter distance
+    count = 0
+    for i in range(n):
+        if distnce[i] == diameter:
+            count += 1
+    return count
+
+# Build the tree from input
+
+edges = [[1, 2], [1, 3], [1, 4], [3, 5]] 
+for u, v in edges:
+    u -= 1
+    v -= 1
+    G[u].append(v)
+    G[v].append(u)
+    degree[u] += 1
+    degree[v] += 1
+
+# Initialize the current best removal candidate and compute initial diameter
+diameter = getDiameter()
+best = (0, -1)
+
+# Perform up to k removals to minimize the diameter
+for _ in range(k):
+    # Identify the best leaf node to remove
+    for i in range(n):
+        if not deleted[i] and degree[i] == 1:
+            nodes_at_diameter = countDiameterNodes(i)
+            if nodes_at_diameter > best[0]:
+                best = (nodes_at_diameter, i)
+    
+    # Remove the selected node and update degrees of its neighbors
+    deleted[best[1]] = 1
+    for neighbor in G[best[1]]:
+        if not deleted[neighbor]:
+            degree[neighbor] -= 1
+    
+    # Reset for the next iteration
+    best = (0, -1)
+    seen = [0] * n
+    diameter = getDiameter()
+
+# Output the minimized diameter after up to k removals
+print(diameter)
+
+
+
+#  maximum paint operation with favorite color c
+
+def main():
+    print("Hello World!")
+    nums_1 = [1, 2, 2, 3, 2, 2, 2, 4]
+    nums_2 = [1, 2, 2, 3, 2, 2, 2, 4, 2, 2, 3, 3, 3, 2, 2, 2, 2, 2, 2]
+    print(func(nums_1, 2, 2))  # 7
+    print(func(nums_2, 3, 2))  # 11
+
+def func(nums, k, c):
+    left = 0
+    right = 0
+    for right in range(len(nums)):
+        # If we included 'c' in the window we reduce the value of k.
+        # # Since k is the maximum c's allowed in a window.
+        if nums[right] != c:
+            k -= 1
+        # A negative k denotes we have consumed all allowed flips and window has
+        # # more than allowed c's, thus increment left pointer by 1 to keep the window size same.
+        if k < 0:
+            # // If the left element to be thrown out is zero we increase k.
+            if nums[left] != c:
+                k += 1
+            left += 1
+    return right - left
+
+if __name__ == "__main__":
+    main()
+
