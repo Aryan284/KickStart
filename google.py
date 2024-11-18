@@ -6343,3 +6343,128 @@ def func(nums, k, c):
 if __name__ == "__main__":
     main()
 
+
+
+# You are given an integer array A of size N. You can jump from index J to index K, such that K > J, in the following way:
+# during odd-numbered jumps (i.e. jumps 1, 3, 5 and so on), you jump to the smallest index K such that A[J] < A[K] 
+# and A[K] − A[J] is minimal among all possible K's.
+# during even-numbered jumps (i.e. jumps 2, 4, 6 and so on), you jump to the smallest index K such that A[J] > A[K]
+# and A[J] − A[K] is minimal among all possible K's.
+# It may be that, for some index J, there is no legal jump. In this case the jumping stops.
+
+
+from collections import defaultdict
+import sys
+
+def solve(arr):
+    n = len(arr)
+    dpOdd = [False] * (n + 1)
+    dpEven = [False] * (n + 1)
+    dpOdd[n - 1] = dpEven[n - 1] = True
+    mp = {float('inf'): n, float('-inf'): n}
+    mp[arr[n - 1]] = n - 1
+    
+    for i in range(n - 2, -1, -1):
+        up = next((index for key, index in sorted(mp.items()) if key > arr[i]), n)
+        down = next((index for key, index in sorted(mp.items(), reverse=True) if key < arr[i]), n)
+        dpOdd[i] = dpEven[up]
+        dpEven[i] = dpOdd[down]
+        mp[arr[i]] = i
+    
+    ret = [arr[i] for i in range(n) if dpOdd[i]]
+    return ret
+
+if __name__ == "__main__":
+    print(solve([10, 13, 12, 14, 15]))  # 14 15
+    print(solve([15, 16, 14, 17, 12]))  # 15 16 14 12
+
+
+
+
+
+# License Plate
+
+def find_target_str(n):
+    # Dictionary to map integers (0-25) to uppercase letters (A-Z)
+    IntToletters = {}
+    helper(IntToletters)  # Populate the dictionary with mappings
+
+    # Initialize the result array for the 5-character license plate
+    ans = ['0'] * 5
+    n = n - 1  # Convert n to 0-indexed for easier calculations
+    index = 4  # Start filling the license plate from the rightmost character
+
+    # Region 1: Purely numeric plates (00000 to 99999)
+    if n <= 99999:
+        # Extract digits from n and fill them into ans
+        while n:
+            lastnum = n % 10  # Extract the last digit
+            ans[index] = str(lastnum)  # Set the digit in the plate
+            index -= 1
+            n = n // 10  # Remove the last digit from n
+
+    # Region 2: Single letter + numeric plates (A0000 to Z9999)
+    elif n > 99999 and n <= (26 * 10000 + 99999):
+        # Determine the letter and remaining numeric part
+        key = (n - 100000) // 10000  # Identify the letter (A-Z)
+        remain = (n - 100000) % 10000  # Remaining numeric part
+        last = IntToletters[key]  # Get the corresponding letter
+        ans[index] = last  # Add the letter to the plate
+        index -= 1
+        # Fill the numeric part into ans
+        while remain:
+            lastnum = remain % 10  # Extract the last digit
+            ans[index] = str(lastnum)  # Set the digit in the plate
+            index -= 1
+            remain = remain // 10  # Remove the last digit from the remaining number
+
+    # Region 3: Two letters + numeric plates (AA000 to ZZ999)
+    elif n > (26 * 10000 + 99999) and n <= (99999 + 26 * 10000 + 26**2 * 1000):
+        # Determine the two letters and remaining numeric part
+        key = (n - (26 * 10000 + 100000)) // 1000  # Identify the two-letter prefix
+        remain = (n - (26 * 10000 + 100000)) % 1000  # Remaining numeric part
+        time = 2  # Two letters to extract
+        while time:
+            k = key % 26  # Extract the last letter index
+            ans[index] = IntToletters[k]  # Get the corresponding letter
+            index -= 1
+            key = key // 26  # Remove the last letter index
+            time -= 1
+        # Fill the numeric part into ans
+        while remain:
+            lastnum = remain % 10  # Extract the last digit
+            ans[index] = str(lastnum)  # Set the digit in the plate
+            index -= 1
+            remain = remain // 10  # Remove the last digit from the remaining number
+
+    # Region 4: Three letters + numeric plates (AAA00 to ZZZ99)
+    elif n > (99999 + 26 * 10000 + 26**2 * 1000) and n <= (99999 + 26 * 10000 + 26**2 * 1000 + 26**3 * 100):
+        # Determine the three letters and remaining numeric part
+        key = (n - (26**2 * 1000 + 26 * 10000 + 100000)) // 100  # Identify the three-letter prefix
+        remain = (n - (26**2 * 1000 + 26 * 10000 + 100000)) % 100  # Remaining numeric part
+        time = 3  # Three letters to extract
+        while time:
+            k = key % 26  # Extract the last letter index
+            ans[index] = IntToletters[k]  # Get the corresponding letter
+            index -= 1
+            key = key // 26  # Remove the last letter index
+            time -= 1
+        # Fill the numeric part into ans
+        while remain:
+            lastnum = remain % 10  # Extract the last digit
+            ans[index] = str(lastnum)  # Set the digit in the plate
+            index -= 1
+            remain = remain // 10  # Remove the last digit from the remaining number
+
+    # Return the fully constructed license plate as a string
+    return ''.join(ans)
+
+
+def helper(map):
+    # Populate the IntToletters dictionary with mappings from 0-25 to 'A'-'Z'
+    for i in range(26):
+        map[i] = chr(i + ord('A'))
+
+
+# Example Usage
+print(find_target_str(4))  # Output: "00002"
