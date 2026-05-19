@@ -6468,3 +6468,590 @@ def helper(map):
 
 # Example Usage
 print(find_target_str(4))  # Output: "00002"
+
+
+#movie with the movie name and rating top K
+
+class Movie:
+    def __init__(self, title, rating):
+        self.title = title
+        self.rating = rating
+        #list to store similar movies
+        self.similarMovies = []
+
+    def addSimilarMovie(self, movie):
+        self.similarMovies.append(movie)
+        #ensuring bidirectional similarity
+        movie.similarMovies.append(self) 
+
+def getTopSimilarMovies(movie, N):
+    visited = set()
+    queue = [movie]
+    #list to store all connected movies
+    similar_movies = []
+
+    while queue:
+        current = queue.pop(0)
+        if current in visited:
+            continue
+        visited.add(current)
+        similarMovies.append(current)
+
+        for neighbor in current.similarMovies:
+            if neighbor not in visited:
+                queue.append(neighbor)
+    #sort the movies in desscending to find top N movies
+    similarMovies.sort(key=lambda x: x.rating, reverse=True)
+
+ #return the top N movies excluding the initial given movie
+ return [m.title for m in similarMovies if m != movie][:N]
+
+
+#creating movies
+A = Movie("A", 6)
+B = Movie("B", 7)
+C = Movie("C", 8)
+D = Movie("D", 9)
+E = Movie("E", 5)
+
+#similarity relationships
+A.addSimilarMovie(B)
+B.addSimilarMovie(C)
+C.addSimilarMovie(D)
+A.addSimilarMovie(E)
+
+#get top 2 recommended movies similar to A
+result = getTopSimilarMovies(A, 2)
+print(result) #["D", "C"]
+
+# Follow up: close to O(log K)
+
+class Movie:
+
+    def __init__(self, title, rating):
+
+        self.title = title
+        self.rating = rating
+
+        self.similarMovies = []
+
+    def addSimilarMovie(self, movie):
+
+        self.similarMovies.append(movie)
+        movie.similarMovies.append(self)
+
+
+def topKSimilarMovies(movie, K):
+
+    visited = set()
+
+    q = deque([movie])
+
+    # min heap -> (rating, movie_name)
+    heap = []
+
+    while q:
+
+        curr = q.popleft()
+
+        if curr in visited:
+            continue
+
+        visited.add(curr)
+
+        # exclude original movie
+        if curr != movie:
+
+            if len(heap) < K:
+
+                heapq.heappush(
+                    heap,
+                    (curr.rating, curr.title)
+                )
+
+            else:
+
+                # compare with smallest in heap
+                if curr.rating > heap[0][0]:
+
+                    heapq.heappop(heap)
+
+                    heapq.heappush(
+                        heap,
+                        (curr.rating, curr.title)
+                    )
+
+        # BFS traversal
+        for neighbor in curr.similarMovies:
+
+            if neighbor not in visited:
+                q.append(neighbor)
+
+    # highest first
+    result = sorted(
+        heap,
+        reverse=True
+    )
+
+    return [title for _, title in result]
+
+A = Movie("A", 6)
+B = Movie("B", 7)
+C = Movie("C", 8)
+D = Movie("D", 9)
+E = Movie("E", 5)
+
+A.addSimilarMovie(B)
+B.addSimilarMovie(C)
+C.addSimilarMovie(D)
+A.addSimilarMovie(E)
+
+print(topKSimilarMovies(A, 2))
+
+# Ad server get advertisment
+
+class Ad:
+
+    def __init__(self, content, score):
+
+        self.content = content
+        self.score = score
+
+
+class AdServer:
+
+    def __init__(self):
+
+        # max heap using negative scores
+        self.heap = []
+
+        self.prev_ad = None
+
+    def insert_ad(self, content, score):
+
+        ad = Ad(content, score)
+
+        heapq.heappush(
+            self.heap,
+            (-score, ad)
+        )
+
+    def serve_ad(self):
+
+        if not self.heap and not self.prev_ad:
+            return None
+
+        if not self.heap:
+            return None
+
+        score, ad = heapq.heappop(self.heap)
+
+        # push previous ad back
+        if self.prev_ad:
+            heapq.heappush(self.heap, self.prev_ad)
+
+        # hold current ad temporarily
+        self.prev_ad = (score, ad)
+
+        return ad.content
+
+# Follow up: Delay 5 sec
+
+class Ad:
+
+    def __init__(self, content, score, delay):
+
+        self.content = content
+        self.score = score
+        self.delay = delay
+
+
+class AdServer:
+
+    def __init__(self):
+
+        # max heap
+        self.available = []
+
+        # cooldown min heap:
+        # (ready_time, score, ad)
+        self.cooldown = []
+
+        self.time = 0
+
+    def insert_ad(self, content, score, delay):
+
+        ad = Ad(content, score, delay)
+
+        heapq.heappush(
+            self.available,
+            (-score, content, ad)
+        )
+
+    def serve_ad(self):
+
+        self.time += 1
+
+        # release cooldown ads
+        while (
+            self.cooldown and
+            self.cooldown[0][0] <= self.time
+        ):
+
+            ready_time, neg_score, content, ad = heapq.heappop(
+                self.cooldown
+            )
+
+            heapq.heappush(
+                self.available,
+                (neg_score, content, ad)
+            )
+
+        if not self.available:
+            return None
+
+        neg_score, content, ad = heapq.heappop(
+            self.available
+        )
+
+        # put ad into cooldown
+        ready_time = self.time + ad.delay
+
+        heapq.heappush(
+            self.cooldown,
+            (
+                ready_time,
+                neg_score,
+                content,
+                ad
+            )
+        )
+
+        return ad.content
+
+
+# Rook replacement problem
+
+#Brute backtrack
+
+def solve(row, usedCols):
+
+    if row > n:
+        return success
+
+    for col in range(1, n+1):
+
+        if col in usedCols:
+            continue
+
+        if countRook(row, col, row, col) == 1:
+
+            usedCols.add(col)
+
+            solve(row + 1, usedCols)
+
+            usedCols.remove(col)
+
+
+class Solution:
+    def findMissingRook(self, n):
+
+        # Find missing row
+        low, high = 1, n
+
+        while low < high:
+            mid = (low + high) // 2
+
+            rooks = countRook(1, 1, mid, n)
+
+            if rooks == mid:
+                low = mid + 1
+            else:
+                high = mid
+
+        missing_row = low
+
+        # Find missing column
+        low, high = 1, n
+
+        while low < high:
+            mid = (low + high) // 2
+
+            rooks = countRook(1, 1, n, mid)
+
+            if rooks == mid:
+                low = mid + 1
+            else:
+                high = mid
+
+        missing_col = low
+
+        return (missing_row, missing_col)
+
+
+# designing LFU cache was asked. Keys were numbers. Values were in the format [ Content : String, Score : INT]. 
+# Once we have accessed a key-value pair, the score was supposed to increase by 1. While evicting I need to follow the standard pattern but 
+# I was supposed to evict only those values whose score was even.
+
+class Node:
+
+    def __init__(self, key, content, score):
+
+        self.key = key
+        self.content = content
+        self.score = score
+        self.freq = 1
+class ModifiedLFUCache:
+
+    def __init__(self, capacity):
+
+        self.capacity = capacity
+
+        self.size = 0
+
+        self.min_freq = 1
+
+        # key -> node
+        self.nodes = {}
+
+        # freq -> OrderedDict(key -> node)
+        self.freq_map = defaultdict(OrderedDict)
+
+    # -----------------------------------------
+    # Update frequency
+    # -----------------------------------------
+
+    def update_freq(self, node):
+
+        freq = node.freq
+
+        del self.freq_map[freq][node.key]
+
+        # update min frequency
+        if (
+            freq == self.min_freq and
+            not self.freq_map[freq]
+        ):
+            self.min_freq += 1
+
+        node.freq += 1
+
+        self.freq_map[node.freq][node.key] = node
+
+    # -----------------------------------------
+    # GET
+    # -----------------------------------------
+
+    def get(self, key):
+
+        if key not in self.nodes:
+            return None
+
+        node = self.nodes[key]
+
+        # increase score
+        node.score += 1
+
+        # update LFU frequency
+        self.update_freq(node)
+
+        return (node.content, node.score)
+
+    # -----------------------------------------
+    # PUT
+    # -----------------------------------------
+
+    def put(self, key, content, score):
+
+        if self.capacity == 0:
+            return
+
+        # update existing
+        if key in self.nodes:
+
+            node = self.nodes[key]
+
+            node.content = content
+            node.score = score
+
+            self.get(key)
+
+            return
+
+        # eviction needed
+        if self.size == self.capacity:
+
+            self.evict()
+
+        node = Node(key, content, score)
+
+        self.nodes[key] = node
+
+        self.freq_map[1][key] = node
+
+        self.min_freq = 1
+
+        self.size += 1
+
+    # -----------------------------------------
+    # Modified eviction
+    # -----------------------------------------
+
+    def evict(self):
+
+        freq = self.min_freq
+
+        while True:
+
+            bucket = self.freq_map[freq]
+
+            found = False
+
+            # LFU + LRU order
+            for key, node in list(bucket.items()):
+
+                # evict ONLY even score
+                if node.score % 2 == 0:
+
+                    del bucket[key]
+                    del self.nodes[key]
+
+                    self.size -= 1
+
+                    found = True
+                    break
+
+            if found:
+                break
+
+            freq += 1
+
+#% replace substitution
+
+from collections import defaultdict, deque
+
+
+class StringExpander:
+
+    # ------------------------------------------------
+    # extract dependencies from "%WORD%" style string
+    # ------------------------------------------------
+    def get_words(self, text):
+
+        words = set()
+        i = 0
+
+        while i < len(text):
+
+            if text[i] == '%':
+                i += 1
+                temp = ""
+
+                while i < len(text) and text[i] != '%':
+                    temp += text[i]
+                    i += 1
+
+                words.add(temp)
+
+            i += 1
+
+        return words
+
+    # ------------------------------------------------
+    # replace using already resolved dictionary
+    # ------------------------------------------------
+    def replace(self, text, dictionary):
+
+        result = []
+        i = 0
+
+        while i < len(text):
+
+            if text[i] == '%':
+                i += 1
+                key = ""
+
+                while i < len(text) and text[i] != '%':
+                    key += text[i]
+                    i += 1
+
+                result.append(dictionary.get(key, ""))
+
+            else:
+                result.append(text[i])
+
+            i += 1
+
+        return "".join(result)
+
+    # ------------------------------------------------
+    # build final dictionary using topo sort (BFS)
+    # ------------------------------------------------
+    def build_dictionary(self, mp):
+
+        graph = defaultdict(list)
+        indegree = defaultdict(int)
+
+        dictionary = {}
+        q = deque()
+
+        # build dependency graph
+        for key, value in mp.items():
+
+            deps = self.get_words(value)
+
+            if not deps:
+                dictionary[key] = value
+                q.append(key)
+            else:
+                for dep in deps:
+                    graph[dep].append(key)
+                    indegree[key] += 1
+
+        # topo BFS
+        while q:
+
+            cur = q.popleft()
+
+            if cur in mp:
+                value = mp[cur]
+
+                if cur not in dictionary:
+                    dictionary[cur] = self.replace(value, dictionary)
+
+            for nxt in graph[cur]:
+
+                indegree[nxt] -= 1
+
+                if indegree[nxt] == 0:
+                    q.append(nxt)
+
+        return dictionary
+
+    # ------------------------------------------------
+    # main function
+    # ------------------------------------------------
+    def replace_word(self, input_str, mp):
+
+        final_dict = self.build_dictionary(mp)
+
+        return self.replace(input_str, final_dict)
+
+
+# ------------------------------------------------
+# Example
+# ------------------------------------------------
+
+mp = {
+    "USER": "admin",
+    "HOME1": "/%USER%/home",
+    "HOME2": "/%USER%/USER/%USER%",
+    "HOME3": "/%Root%/USER%HOME1%",
+    "Root": "root"
+}
+
+input_str = " I am %USER% My home1 is %HOME1%, My home2 is %HOME2%, My home3 is %HOME3%"
+
+obj = StringExpander()
+
+print(obj.replace_word(input_str, mp))
