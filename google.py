@@ -7485,3 +7485,188 @@ seqs = [
 ]
 
 print(build_order(seqs))
+
+
+# AP subarray
+
+def special_ap(arr):
+    n = len(arr)
+    if n == 0:
+        return 0
+
+    sum_inc = arr[:] # inc means increasing
+    len_inc = [1] * n 
+    sum_dec = arr[:] # dec means decreasing
+    len_dec = [1] * n
+    total = sum_inc[0]
+
+    for i in range(1, n):
+        if arr[i - 1] + 1 == arr[i]:
+            len_inc[i] = len_inc[i - 1] + 1
+            sum_inc[i] = sum_inc[i - 1] + arr[i] * len_inc[i]
+
+        if arr[i - 1] - 1 == arr[i]:
+            len_dec[i] = len_dec[i - 1] + 1
+            sum_dec[i] = sum_dec[i - 1] + arr[i] * len_dec[i]
+
+        total += sum_inc[i] + sum_dec[i] - arr[i]
+    return total
+
+# stone capture
+
+def is_captured(board, row, col):
+
+    rows = len(board)
+    cols = len(board[0])
+
+    color = board[row][col]
+
+    if color == 'O':
+        return False
+
+    visited = set()
+
+    q = deque()
+    q.append((row, col))
+    visited.add((row, col))
+
+    directions = [
+        (1, 0),
+        (-1, 0),
+        (0, 1),
+        (0, -1)
+    ]
+
+    while q:
+
+        x, y = q.popleft()
+
+        for dx, dy in directions:
+
+            nx = x + dx
+            ny = y + dy
+
+            if 0 <= nx < rows and 0 <= ny < cols:
+
+                # liberty found
+                if board[nx][ny] == 'O':
+                    return False
+
+                # same color stone
+                if (
+                    board[nx][ny] == color and
+                    (nx, ny) not in visited
+                ):
+                    visited.add((nx, ny))
+                    q.append((nx, ny))
+
+    return True
+
+# Followup: Count stone
+from collections import deque
+
+
+def count_stones(board, row, col):
+
+    rows = len(board)
+    cols = len(board[0])
+
+    color = board[row][col]
+
+    if color == 'O':
+        return 0
+
+    visited = set()
+    q = deque()
+
+    q.append((row, col))
+    visited.add((row, col))
+
+    directions = [
+        (1, 0),
+        (-1, 0),
+        (0, 1),
+        (0, -1)
+    ]
+
+    count = 0
+
+    while q:
+
+        x, y = q.popleft()
+        count += 1
+
+        for dx, dy in directions:
+
+            nx = x + dx
+            ny = y + dy
+
+            if (
+                0 <= nx < rows and
+                0 <= ny < cols and
+                (nx, ny) not in visited and
+                board[nx][ny] == color
+            ):
+                visited.add((nx, ny))
+                q.append((nx, ny))
+
+    return count
+
+
+
+# two N-sided dice P and Q rolled
+def ties_count(P, Q):
+    n = len(P)
+    i = n - 1
+    j = n - 1
+    count = 0
+
+    while i >= 0 and j >= 0:
+
+        if P[i] == Q[j]:
+            v = P[i]
+
+            cp = 0
+            while i >= 0 and P[i] == v:
+                cp += 1
+                i -= 1
+
+            cq = 0
+            while j >= 0 and Q[j] == v:
+                cq += 1
+                j -= 1
+
+            count += cp * cq
+
+        elif P[i] > Q[j]:
+            i -= 1
+
+        else:
+            j -= 1
+
+    return count
+
+
+
+def p_win_count(P, Q):
+    n = len(P)
+
+    i = n - 1
+    j = n - 1
+
+    count = 0
+
+    while i >= 0 and j >= 0:
+
+        while j >= 0 and Q[j] >= P[i]:
+            j -= 1
+
+        if j < 0:
+            break
+
+        count += (j + 1)
+
+        i -= 1
+
+    return count
+
