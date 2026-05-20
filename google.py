@@ -7055,3 +7055,433 @@ input_str = " I am %USER% My home1 is %HOME1%, My home2 is %HOME2%, My home3 is 
 obj = StringExpander()
 
 print(obj.replace_word(input_str, mp))
+
+#sweet lake island
+class Solution:
+    def count_lakes(self, grid, start_i, start_j):
+
+        rows = len(grid)
+        cols = len(grid[0])
+
+        # --------------------------------------------
+        # Directions
+        # --------------------------------------------
+
+        # island connected in 8 directions
+        island_dirs = [
+            (-1, -1), (-1, 0), (-1, 1),
+            (0, -1),           (0, 1),
+            (1, -1),  (1, 0),  (1, 1)
+        ]
+
+        # water connected in 4 directions
+        water_dirs = [
+            (-1, 0),
+            (1, 0),
+            (0, -1),
+            (0, 1)
+        ]
+
+        # --------------------------------------------
+        # Step 1:
+        # Find target island
+        # --------------------------------------------
+
+        island = set()
+
+        q = deque()
+        q.append((start_i, start_j))
+
+        island.add((start_i, start_j))
+
+        while q:
+
+            x, y = q.popleft()
+
+            for dx, dy in island_dirs:
+
+                nx = x + dx
+                ny = y + dy
+
+                if (
+                    0 <= nx < rows and
+                    0 <= ny < cols and
+                    grid[nx][ny] == 1 and
+                    (nx, ny) not in island
+                ):
+
+                    island.add((nx, ny))
+                    q.append((nx, ny))
+
+        # --------------------------------------------
+        # Step 2:
+        # Explore water bodies touching island
+        # --------------------------------------------
+
+        visited_water = set()
+
+        lakes = 0
+
+        for x, y in island:
+
+            for dx, dy in water_dirs:
+
+                nx = x + dx
+                ny = y + dy
+
+                # adjacent water
+                if (
+                    0 <= nx < rows and
+                    0 <= ny < cols and
+                    grid[nx][ny] == 0 and
+                    (nx, ny) not in visited_water
+                ):
+
+                    # BFS water component
+                    water_q = deque()
+                    water_q.append((nx, ny))
+
+                    visited_water.add((nx, ny))
+
+                    touches_boundary = False
+                    touches_island = False
+
+                    while water_q:
+
+                        wx, wy = water_q.popleft()
+
+                        # ocean-connected?
+                        if (
+                            wx == 0 or
+                            wy == 0 or
+                            wx == rows - 1 or
+                            wy == cols - 1
+                        ):
+                            touches_boundary = True
+
+                        # check neighboring cells
+                        for wdx, wdy in water_dirs:
+
+                            nwx = wx + wdx
+                            nwy = wy + wdy
+
+                            if (
+                                0 <= nwx < rows and
+                                0 <= nwy < cols
+                            ):
+
+                                # connected water
+                                if (
+                                    grid[nwx][nwy] == 0 and
+                                    (nwx, nwy) not in visited_water
+                                ):
+
+                                    visited_water.add((nwx, nwy))
+                                    water_q.append((nwx, nwy))
+
+                                # touches target island
+                                elif (
+                                    grid[nwx][nwy] == 1 and
+                                    (nwx, nwy) in island
+                                ):
+
+                                    touches_island = True
+
+                    # valid freshwater lake
+                    if (
+                        touches_island and
+                        not touches_boundary
+                    ):
+                        lakes += 1
+
+        return lakes
+
+
+# ------------------------------------------------
+# Example
+# ------------------------------------------------
+
+grid = [
+    [0,0,0,0,0,1,0,0,0,0],
+    [0,0,1,0,0,0,1,1,1,0],
+    [0,1,0,1,0,0,1,0,0,1],
+    [0,0,1,0,0,0,1,1,1,0],
+    [0,0,0,0,0,0,1,0,1,0],
+    [0,0,0,0,0,0,1,1,1,0]
+]
+
+sol = Solution()
+
+print(
+    sol.count_lakes(grid, 2, 7)
+)
+
+# Count Visible People
+def visible_people_left(heights):
+    n = len(heights)
+    result = [0] * n
+
+    stack = []
+
+    for i, h in enumerate(heights):
+        while stack and stack[-1][0] <= h:
+            stack.pop()
+
+        if stack:
+            run_length = i - stack[-1][1]
+
+            wall_chain = len(stack) - 1
+            result[i] = run_length + wall_chain
+        else:
+            result[i] = i
+
+        stack.append((h, i))
+
+    return result
+
+# Bad commit
+commits = [10,9,9,8,8,8,7]
+
+def worse_commit(left, right):
+    return commits[left] > commits[right]  
+
+
+def get_slow_commits(first, last):
+    commits = []
+    mid = first + (last - first) // 2
+
+    if last - first == 1: # only two elements
+        if worse_commit(first, last):
+            return [last]
+
+    if worse_commit(first, mid):
+        commits.extend(get_slow_commits(first, mid))
+    if worse_commit(mid, last):
+        commits.extend(get_slow_commits(mid, last))
+    return commits
+    
+
+assert get_slow_commits(0, len(commits)-1) == [1,3,6]
+
+
+#truncate each element in the array to the largest possible value not exceeding x, 
+# such that the sum of the truncated array equals the storage limit S.
+
+def find_x(arr, S):
+    low = 0
+    high = max(arr)
+    ans = -1
+
+    while low <= high:
+        mid = low + (high - low) // 2
+
+        total = 0
+        for v in arr:
+            total += min(v, mid)
+
+        if total < S:
+            low = mid + 1
+        else:
+            ans = mid
+            high = mid - 1
+
+    return ans
+
+
+# Example
+arr = [2, 3, 5]
+S = 10
+
+print(find_x(arr, S))  # 5
+
+
+# stop tower construction
+
+class DSU:
+    def __init__(self, n, m):
+        self.n = n
+        self.m = m
+
+        self.parent = {}
+        self.rank = {}
+
+        self.left = {}
+        self.right = {}
+
+    def add(self, x):
+        self.parent[x] = x
+        self.rank[x] = 0
+        self.left[x] = False
+        self.right[x] = False
+
+    def find(self, x):
+        if self.parent[x] != x:
+            self.parent[x] = self.find(self.parent[x])
+        return self.parent[x]
+
+    def union(self, a, b):
+        ra = self.find(a)
+        rb = self.find(b)
+
+        if ra == rb:
+            return
+
+        if self.rank[ra] < self.rank[rb]:
+            ra, rb = rb, ra
+
+        self.parent[rb] = ra
+
+        self.left[ra] = self.left[ra] or self.left[rb]
+        self.right[ra] = self.right[ra] or self.right[rb]
+
+        if self.rank[ra] == self.rank[rb]:
+            self.rank[ra] += 1
+
+    def is_connected(self, x):
+        r = self.find(x)
+        return self.left[r] and self.right[r]
+
+
+def can_stop_construction(n, m, towers):
+    """
+    towers = stream of (x, y) each day
+    """
+
+    dsu = DSU(n, m)
+
+    grid = [[False] * m for _ in range(n)]
+
+    directions = [(1,0), (-1,0), (0,1), (0,-1)]
+
+    def idx(x, y):
+        return (x, y)
+
+    for day, (x, y) in enumerate(towers):
+
+        grid[x][y] = True
+        dsu.add((x, y))
+
+        # mark boundary connection
+        root = dsu.find((x, y))
+        if y == 0:
+            dsu.left[root] = True
+        if y == m - 1:
+            dsu.right[root] = True
+
+        # union with neighbors
+        for dx, dy in directions:
+            nx, ny = x + dx, y + dy
+
+            if 0 <= nx < n and 0 <= ny < m and grid[nx][ny]:
+                dsu.union((x, y), (nx, ny))
+
+        # check condition
+        if dsu.is_connected((x, y)):
+            return day + 1  # 1-based day
+
+    return -1
+
+
+# Example usage
+n, m = 3, 4
+towers = [(0,0), (1,0), (1,1), (1,2), (1,3)]
+
+print(can_stop_construction(n, m, towers))
+
+
+# You are given an array time[] representing the start times of a set of tasks. 
+# Each task takes 6 units of time to complete once it starts. You are also given an integer C representing the number of CPUs available. 
+# Each CPU can only handle one task at a time.
+
+# Your goal is to schedule all the tasks such that the total time to complete all tasks is minimized.
+
+# Return the minimum time at which all tasks will be completed.
+
+def solve(time, c):
+    # sort tasks by arrival time
+    time.sort()
+
+    # min-heap for CPU availability times
+    min_heap = []
+
+    # all CPUs are initially free at time 0
+    for _ in range(c):
+        heapq.heappush(min_heap, 0)
+
+    last_finish_time = 0
+    duration = 6
+
+    for t in time:
+        earliest_free = heapq.heappop(min_heap)
+
+        start_time = max(t, earliest_free)
+        finish_time = start_time + duration
+
+        last_finish_time = max(last_finish_time, finish_time)
+
+        heapq.heappush(min_heap, finish_time)
+
+    return last_finish_time
+
+
+# Example
+time = [1, 3, 6]
+c = 2
+
+print(solve(time, c))  # output depends on scheduling
+
+
+# sequence array, each sequence has some value in order
+from collections import defaultdict, deque
+
+def build_order(sequences):
+
+    graph = defaultdict(set)
+    indegree = defaultdict(int)
+    nodes = set()
+
+    # Step 1: build graph
+    for seq in sequences:
+        for x in seq:
+            nodes.add(x)
+
+        for i in range(len(seq) - 1):
+            u, v = seq[i], seq[i + 1]
+
+            if v not in graph[u]:
+                graph[u].add(v)
+                indegree[v] += 1
+
+    # ensure all nodes exist in indegree
+    for n in nodes:
+        indegree.setdefault(n, 0)
+
+    # Step 2: Kahn's BFS
+    q = deque([n for n in nodes if indegree[n] == 0])
+
+    result = []
+
+    while q:
+        node = q.popleft()
+        result.append(node)
+
+        for nei in graph[node]:
+            indegree[nei] -= 1
+            if indegree[nei] == 0:
+                q.append(nei)
+
+    # Step 3: check cycle
+    if len(result) != len(nodes):
+        return False
+
+    return result
+
+
+# Example
+seqs = [
+    [1,2,15,8],
+    [2,4,7,8],
+    [2,3,7,15]
+]
+
+print(build_order(seqs))
