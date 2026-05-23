@@ -7950,3 +7950,556 @@ logs = [
 ]
 
 print(max_occupancy(logs))
+
+
+#health check minimum health required 
+# O((V+E)logW)
+
+# where W = max edge weight.
+
+def minimum_health(n, edges, start, dest):
+
+    graph = defaultdict(list)
+
+    for u, v, health in edges:
+        graph[u].append((v, health))
+        graph[v].append((u, health))
+
+    pq = [(0, start)]  # (required_health, node)
+
+    best = {}
+
+    while pq:
+
+        curr_health, node = heapq.heappop(pq)
+
+        if node in best:
+            continue
+
+        best[node] = curr_health
+
+        if node == dest:
+            return curr_health
+
+        for nei, edge_health in graph[node]:
+
+            if nei not in best:
+
+                new_health = max(curr_health, edge_health)
+
+                heapq.heappush(
+                    pq,
+                    (new_health, nei)
+                )
+
+    return -1
+
+
+# Example
+edges = [
+    ('A', 'B', 4),
+    ('A', 'C', 2),
+    ('C', 'D', 8),
+    ('B', 'D', 5)
+]
+
+print(minimum_health(4, edges, 'A', 'D'))
+
+# Binary search soln
+from collections import defaultdict, deque
+
+
+def can_reach(graph, start, dest, health):
+    """
+    Check if destination can be reached
+    using only edges with requirement <= health
+    """
+
+    queue = deque([start])
+    visited = set([start])
+
+    while queue:
+
+        node = queue.popleft()
+
+        if node == dest:
+            return True
+
+        for nei, req in graph[node]:
+
+            # can traverse this edge
+            if req <= health and nei not in visited:
+
+                visited.add(nei)
+                queue.append(nei)
+
+    return False
+
+
+def minimum_health(n, edges, start, dest):
+
+    graph = defaultdict(list)
+
+    min_w = float('inf')
+    max_w = 0
+
+    # build graph
+    for u, v, w in edges:
+
+        graph[u].append((v, w))
+        graph[v].append((u, w))
+
+        min_w = min(min_w, w)
+        max_w = max(max_w, w)
+
+    low = min_w
+    high = max_w
+
+    answer = max_w
+
+    # binary search on answer
+    while low <= high:
+
+        mid = (low + high) // 2
+
+        # if path exists with this health
+        if can_reach(graph, start, dest, mid):
+
+            answer = mid
+            high = mid - 1
+
+        else:
+            low = mid + 1
+
+    return answer
+
+
+# O(V+E)
+
+# Binary search:
+
+# O(logW)
+
+# Total:
+
+# O((V+E)logW)
+
+edges = [
+    ('A', 'B', 4),
+    ('A', 'C', 2),
+    ('C', 'D', 8),
+    ('B', 'D', 5)
+]
+
+print(minimum_health(
+    4,
+    edges,
+    'A',
+    'D'
+))
+
+
+# count triangle in grid 
+
+def helper(grid, max1, max2):
+    n = len(grid[0])
+
+    dp = [[0] * 2 for _ in range(n + 2)]
+    ndp = [[0] * 2 for _ in range(n + 2)]
+
+    for row in grid:
+        for i in range(1, n + 1):
+
+            if row[i - 1] == 1:
+                ndp[i][0] = min(dp[i][0], dp[i - 1][0]) + 1
+                ndp[i][1] = min(dp[i][1], dp[i + 1][1]) + 1
+            else:
+                ndp[i][0] = 0
+                ndp[i][1] = 0
+
+            max1[0] = max(max1[0], ndp[i][0], ndp[i][1])
+            max2[0] = max(max2[0], min(ndp[i][0], ndp[i][1]))
+
+        dp, ndp = ndp, [[0] * 2 for _ in range(n + 2)]
+
+
+def max_area(grid: List[List[int]]) -> int:
+    if not grid or not grid[0]:
+        return 0
+
+    m, n = len(grid), len(grid[0])
+
+    max1 = [0]
+    max2 = [0]
+
+    def run(g):
+        helper(g, max1, max2)
+
+    # original
+    run(grid)
+
+    # reverse rows (flip vertically)
+    run(grid[::-1])
+
+    # transpose
+    rotated = [[grid[i][j] for i in range(m)] for j in range(n)]
+    run(rotated)
+
+    # reverse rotated
+    run(rotated[::-1])
+
+    return max(
+        max1[0] * (max1[0] + 1) // 2,
+        max2[0] * max2[0]
+    )
+
+
+# keypad coord
+
+class TouchscreenKeyboard:
+    def __init__(self):
+        # keyboard layout (uniform grid assumption)
+        self.keyboard = [
+            "qwertyuiop",
+            "asdfghjkl",
+            "zxcvbnm,"
+        ]
+
+        self.key_width = 1.0
+        self.key_height = 1.0
+
+    def get_character(self, x, y):
+        if x < 0 or y < 0:
+            return '?'
+
+        row = int(y // self.key_height)
+        col = int(x // self.key_width)
+
+        if 0 <= row < len(self.keyboard) and 0 <= col < len(self.keyboard[row]):
+            return self.keyboard[row][col]
+
+        return '?'
+
+
+
+# truncate logs
+def find_max_x_and_truncate(logs, max_size):
+    
+    source_logs = defaultdict(list)
+    for source, message in logs:
+        source_logs[source].append(f"{source}: {message}")     
+    
+    left, right = 1, max(len(messages) for messages in source_logs.values())
+    best_x = 1
+
+    while left <= right:
+        mid = (left + right) // 2
+        truncated_count = 0
+
+        for messages in source_logs.values():
+            if len(messages) > mid:
+                truncated_count += mid
+            else:
+                truncated_count += len(messages)  
+        
+        if truncated_count <= max_size:
+            best_x = mid
+            left = mid + 1 
+        else:
+            right = mid - 1 
+
+    truncated_logs = []
+    for messages in source_logs.values():
+        if len(messages) > best_x:
+            truncated_logs.extend(messages[:best_x])
+        else:
+            truncated_logs.extend(messages)
+
+    return best_x, truncated_logs
+
+
+logMessages = [
+    ("source_a", "m"),
+    ("source_a", "m"),
+    ("source_b", "m")
+]
+max_size = 2
+
+x_value, truncated_list = find_max_x_and_truncate(logMessages, max_size)
+print("Max X:", x_value)
+print("Truncated Logs:", truncated_list)
+
+
+
+
+# undirected and unweighted graph
+def bfs(adj, start):
+    dist = {}
+    q = deque([(start, 0)])
+    visited = set([start])
+
+    while q:
+        node, d = q.popleft()
+        dist[node] = d
+
+        for nei in adj[node]:
+            if nei not in visited:
+                visited.add(nei)
+                q.append((nei, d + 1))
+
+    return dist
+
+
+def minimumWeight(edges, src1, src2, dest):
+    adj = defaultdict(list)
+
+    for u, v, _ in edges:
+        adj[u].append(v)
+        adj[v].append(u)
+
+    dist1 = bfs(adj, src1)
+    dist2 = bfs(adj, src2)
+    distd = bfs(adj, dest)
+
+    ans = float('inf')
+
+    for node in dist1:
+        if node in dist2 and node in distd:
+            ans = min(ans, dist1[node] + dist2[node] + distd[node])
+
+    return ans if ans != float('inf') else -1
+
+
+# -------------------- RUNNER --------------------
+
+if __name__ == "__main__":
+    edges = [
+        [0,2,2],
+        [0,5,6],
+        [1,0,3],
+        [1,4,5],
+        [2,1,1],
+        [2,3,3],
+        [2,3,4],
+        [3,4,2],
+        [4,5,1]
+    ]
+
+    src1 = 1
+    src2 = 2
+    dest = 5
+
+    result = minimumWeight(edges, src1, src2, dest)
+
+    print("Minimum total distance:", result)
+
+
+# door cross queue
+def timeTaken(self, arrival: List[int], state: List[int]) -> List[int]:
+        # Two queues: queue[0] for entering, queue[1] for exiting
+        queues = [deque(), deque()]
+
+        # Total number of people
+        num_people = len(arrival)
+
+        # Current time and index of next person to arrive
+        current_time = 0
+        person_index = 0
+
+        # Previous state: 1 means exit (default when door not used previously)
+        previous_state = 1
+
+        # Result array to store the time each person passes through
+        result = [0] * num_people
+
+        # Process until all people have passed through the door
+        while person_index < num_people or queues[0] or queues[1]:
+            # Add all people who have arrived by current time to their respective queues
+            while person_index < num_people and arrival[person_index] <= current_time:
+                queues[state[person_index]].append(person_index)
+                person_index += 1
+
+            # Process the queues based on priority rules
+            if queues[0] and queues[1]:
+                # Both queues have people: use previous state for priority
+                person_to_process = queues[previous_state].popleft()
+                result[person_to_process] = current_time
+            elif queues[0] or queues[1]:
+                # Only one queue has people: process that queue
+                previous_state = 0 if queues[0] else 1
+                person_to_process = queues[previous_state].popleft()
+                result[person_to_process] = current_time
+            else:
+                # No one is waiting: reset to exit priority for next use
+                previous_state = 1
+
+            # Move to next time unit
+            current_time += 1
+
+        return result
+
+
+
+# latency server
+
+from collections import deque
+
+class LatencyServer:
+    def __init__(self, k):
+        self.k = k
+        self.q = deque()
+        self.total = 0
+
+    def ping(self, x):
+        self.q.append(x)
+        self.total += x
+
+        if len(self.q) > self.k:
+            self.total -= self.q.popleft()
+
+    def get_average(self):
+        if not self.q:
+            return 0
+        return self.total / len(self.q)
+
+
+# followup
+def run():
+    bottom = SortedList()
+    top = SortedList()
+
+    N = 5
+    K = 2
+
+    S = [20, 4, 2, 1, -2, 20, 0, 10, 4, 1, 19, 14, 11, 8, 25, 1]
+
+    window = []
+    sum_bottom = 0
+
+    for i in range(len(S)):
+
+        # fill bottom initially
+        if len(bottom) < N - K:
+            bottom.add(S[i])
+            sum_bottom += S[i]
+            window.append(S[i])
+
+        else:
+            if i >= N:
+                out = window.pop(0)
+
+                # remove from top or bottom
+                if out in top:
+                    top.remove(out)
+                else:
+                    bottom.remove(out)
+                    sum_bottom -= out
+
+                    # rebalance: move smallest from top → bottom
+                    if len(top) > 0:
+                        smallest_top = top[0]
+                        top.remove(smallest_top)
+                        bottom.add(smallest_top)
+                        sum_bottom += smallest_top
+
+            window.append(S[i])
+
+            # insert new element
+            if len(bottom) > 0 and S[i] > bottom[-1]:
+                top.add(S[i])
+            else:
+                if len(bottom) > 0:
+                    largest_bottom = bottom[-1]
+                    bottom.remove(largest_bottom)
+                    top.add(largest_bottom)
+
+                    bottom.add(S[i])
+                    sum_bottom += (S[i] - largest_bottom)
+                else:
+                    bottom.add(S[i])
+                    sum_bottom += S[i]
+
+            # report mean
+            if i >= N - 1:
+                print(
+                    f"Found new mean: {sum_bottom / (N - K)} from elements: {list(bottom)}"
+                )
+
+
+run()
+
+
+
+
+# given three sorted arrays A, B, and C, each of the same length, and an integer d.
+# Your task is to find the number of tuples (i, j, k) such that:
+
+# |A[i] - B[j]| <= d  
+# |A[i] - C[k]| <= d  
+# |B[j] - C[k]| <= d
+
+def merge_arr(A: List[int], B: List[int], C: List[int]):
+    i = j = k = 0
+    merged = []
+
+    n, m, o = len(A), len(B), len(C)
+
+    while i < n or j < m or k < o:
+        a = A[i] if i < n else float('inf')
+        b = B[j] if j < m else float('inf')
+        c = C[k] if k < o else float('inf')
+
+        mn = min(a, b, c)
+
+        if mn == a:
+            merged.append((a, 0))
+            i += 1
+        elif mn == b:
+            merged.append((b, 1))
+            j += 1
+        else:
+            merged.append((c, 2))
+            k += 1
+
+    return merged
+
+
+def count_triplets(A: List[int], B: List[int], C: List[int], d: int) -> int:
+    merged = merge_arr(A, B, C)
+
+    start = 0
+    cntA = cntB = cntC = 0
+    ans = 0
+
+    for end in range(len(merged)):
+
+        val, typ = merged[end]
+
+        # include current element
+        if typ == 0:
+            cntA += 1
+        elif typ == 1:
+            cntB += 1
+        else:
+            cntC += 1
+
+        # shrink window while invalid
+        while start < end and val - merged[start][0] > d:
+            t = merged[start][1]
+            if t == 0:
+                cntA -= 1
+            elif t == 1:
+                cntB -= 1
+            else:
+                cntC -= 1
+            start += 1
+
+        # count contributions
+        if typ == 0:
+            ans += cntB * cntC
+        elif typ == 1:
+            ans += cntA * cntC
+        else:
+            ans += cntA * cntB
+
+    return ans
