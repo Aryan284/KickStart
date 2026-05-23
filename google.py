@@ -7670,3 +7670,283 @@ def p_win_count(P, Q):
 
     return count
 
+# ‘L’ and ‘R’ pieces and black space ‘_’. 
+
+# Brute will be BFS
+class Solution:
+    def canChange(self, start: str, target: str) -> bool:
+        start_length = len(start)
+        # pointers for start string and target string
+        start_index, target_index = (0, 0)
+
+        while start_index < start_length or target_index < start_length:
+            # skip underscores in start
+            while start_index < start_length and start[start_index] == "_":
+                start_index += 1
+
+            # skip underscores in target
+            while target_index < start_length and target[target_index] == "_":
+                target_index += 1
+
+            # if one string exhausted, both strings should be exhausted
+            if start_index == start_length or target_index == start_length:
+                return (
+                    start_index == start_length and target_index == start_length
+                )
+
+            # check if the pieces match and follow movement rules
+            if (
+                start[start_index] != target[target_index]
+                or (start[start_index] == "L" and start_index < target_index)
+                or (start[start_index] == "R" and start_index > target_index)
+            ):
+                return False
+
+            start_index += 1
+            target_index += 1
+
+        # if all conditions satisfied, return true
+        return True
+
+
+# Compute the min distinct edges required for Bob and Alice to reach D.
+
+from collections import defaultdict, deque
+
+def bfs_shortest_path(graph, start):
+    distances = {}
+    queue = deque([(start, 0)])  # (current_node, current_distance)
+    visited = set()
+    
+    while queue:
+        node, dist = queue.popleft()
+        if node in visited:
+            continue
+        visited.add(node)
+        distances[node] = dist
+        for neighbor in graph[node]:
+            if neighbor not in visited:
+                queue.append((neighbor, dist + 1))
+    
+    return distances
+
+def min_distinct_edges(graph, start_a, start_b, destination):
+    """Finds the minimum distinct edges required for Alice and Bob to reach `destination`."""
+    distances_from_dest = bfs_shortest_path(graph, destination)
+    
+    paths_a = bfs_shortest_path(graph, start_a)
+    paths_b = bfs_shortest_path(graph, start_b)
+    
+    min_distinct_edges = float('inf')
+    
+    for node in graph.keys():
+        if node not in paths_a or node not in paths_b or node not in distances_from_dest:
+            continue
+        
+        path_a_to_node = paths_a[node]
+        path_b_to_node = paths_b[node]
+        shared_path_to_dest = distances_from_dest[node]
+        
+        total_distinct_edges = path_a_to_node + path_b_to_node + shared_path_to_dest
+        min_distinct_edges = min(min_distinct_edges, total_distinct_edges)
+    
+    return min_distinct_edges
+
+graph = {
+    'A': ['F', 'C'],
+    'B': ['C', 'G'],
+    'C': ['A', 'B', 'E'],
+    'E': ['C', 'D'],
+    'D': ['E', 'F'],
+    'F': ['A', 'D'],
+    'G': ['B', 'H'],
+    'H': ['G']
+}
+
+start_a = 'A'
+start_b = 'B'
+destination = 'D'
+
+result = min_distinct_edges(graph, start_a, start_b, destination)
+print("Minimum distinct edges required:", result)
+
+
+
+
+# color graph
+def find_binary_tree_root(edges):
+
+    degree = defaultdict(int)
+
+    for u, v in edges:
+        degree[u] += 1
+        degree[v] += 1
+
+    for node in degree:
+        if degree[node] <= 2:
+            return node
+
+    return None
+class ColoredBinaryTree:
+
+    def __init__(self, edges, colors):
+        """
+        edges  : list of (u, v)
+        colors : dict {node: color}
+                 color in {'R', 'B', 'W'}
+        """
+
+        self.graph = defaultdict(list)
+        self.colors = colors
+
+        for u, v in edges:
+            self.graph[u].append(v)
+            self.graph[v].append(u)
+
+    # ---------------------------------------------------
+    # Problem 2:
+    # Alternating Black/White Tree
+    # ---------------------------------------------------
+
+    def find_bw_root(self):
+
+        # verify all adjacent nodes have opposite colors
+        for u in self.graph:
+            for v in self.graph[u]:
+
+                if self.colors[u] == self.colors[v]:
+                    return None
+
+        # root must have degree <= 2
+        for node in self.graph:
+            if len(self.graph[node]) <= 2:
+                return node
+
+        return None
+
+    # ---------------------------------------------------
+    # Problem 3:
+    # Fixed cyclic order RBW / BWR / WRB
+    # ---------------------------------------------------
+
+    def find_rbw_root(self):
+
+        sequences = [
+            ['R', 'B', 'W'],
+            ['B', 'W', 'R'],
+            ['W', 'R', 'B']
+        ]
+
+        for seq in sequences:
+
+            # build parent color mapping
+            parent_color = {
+                seq[0]: seq[2],
+                seq[1]: seq[0],
+                seq[2]: seq[1]
+            }
+
+            candidate_roots = []
+
+            valid = True
+
+            for node in self.graph:
+
+                curr_color = self.colors[node]
+
+                required_parent = parent_color[curr_color]
+
+                parent_neighbors = 0
+
+                for nei in self.graph[node]:
+                    if self.colors[nei] == required_parent:
+                        parent_neighbors += 1
+
+                # root candidate
+                if parent_neighbors == 0:
+
+                    # root must satisfy binary tree condition
+                    if len(self.graph[node]) > 2:
+                        valid = False
+                        break
+
+                    candidate_roots.append(node)
+
+                # non-root node
+                elif parent_neighbors != 1:
+                    valid = False
+                    break
+
+            if valid and len(candidate_roots) == 1:
+                return candidate_roots[0], seq
+
+        return None
+
+
+# ---------------------------------------------------
+# Example
+# ---------------------------------------------------
+
+edges = [
+    ('A', 'B'),
+    ('B', 'C'),
+    ('C', 'D'),
+    ('D', 'E')
+]
+
+colors = {
+    'A': 'R',
+    'B': 'B',
+    'C': 'W',
+    'D': 'R',
+    'E': 'B'
+}
+
+solver = ColoredBinaryTree(edges, colors)
+
+print("BW root:", solver.find_bw_root())
+
+print("RBW root:", solver.find_rbw_root())
+
+# Given security logs occupancy
+def max_occupancy(logs):
+
+    events = []
+
+    for user, action, timestamp in logs:
+
+        if action == "enter":
+            events.append((timestamp, 1))
+
+        else:
+            events.append((timestamp, -1))
+
+    # exit before enter at same timestamp
+    events.sort(key=lambda x: (x[0], x[1]))
+
+    current = 0
+    max_people = 0
+    max_time = None
+
+    for time, delta in events:
+
+        current += delta
+
+        if current > max_people:
+            max_people = current
+            max_time = time
+
+    return max_people, max_time
+
+
+# Example
+logs = [
+    ("Alice", "enter", 1),
+    ("Bob", "enter", 2),
+    ("Alice", "exit", 5),
+    ("Charlie", "enter", 4),
+    ("Bob", "exit", 6),
+    ("Charlie", "exit", 8)
+]
+
+print(max_occupancy(logs))
