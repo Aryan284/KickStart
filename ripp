@@ -1,84 +1,1487 @@
-# Food delivery 
+  """
+  Food Delivery Payment System - LLD Solution (minimal libraries)
+  ================================================================
+  Only uses: datetime, Decimal, heapq (all standard library, no extras).
+  No dataclass, no itertools.
+  """
 
-from dataclasses import dataclass, field
-  from datetime import datetime, timedelta
+  from datetime import datetime, timedelta, timezone
   from decimal import Decimal
   from heapq import heappush, heappop
-  import itertools
 
 
-  @dataclass(frozen=True)
+  # ---------------------------------------------------------------------------
+  # Domain models (plain classes)
+  # ---------------------------------------------------------------------------
+
   class Driver:
-      id: int
-      hourly_rate: Decimal
+      """Represents a delivery driver with a fixed hourly rate."""
+
+      def __init__(self, driver_id, hourly_rate):
+          self.id = driver_id
+          self.hourly_rate = hourly_rate
+
+      def __repr__(self):
+          return f"Driver(id={self.id}, rate={self.hourly_rate})"
 
 
-  @dataclass(frozen=True, order=False)
   class Delivery:
-      driver_id: int
-      start_time: datetime
-      end_time: datetime
-      cost: Decimal
+      """
+      Represents one completed delivery.
+      Cost is precomputed at construction time so reads stay O(1)
+      and the rate is locked in at delivery time (correct payroll behavior).
+      """
 
+      def __init__(self, driver_id, start_time, end_time, cost):
+          self.driver_id = driver_id
+          self.start_time = start_time
+          self.end_time = end_time
+          self.cost = cost
+
+      def __repr__(self):
+          return (f"Delivery(driver={self.driver_id}, "
+                  f"start={self.start_time}, end={self.end_time}, "
+                  f"cost={self.cost})")
+
+
+  # ---------------------------------------------------------------------------
+  # Main system
+  # ---------------------------------------------------------------------------
 
   class DeliverySystem:
-      def __init__(self) -> None:
-          self._drivers: dict[int, Driver] = {}
-          self._total_cost: Decimal = Decimal("0")
-          self._total_unpaid: Decimal = Decimal("0")
-          # Min-heap of (end_time, tie_breaker, Delivery)
-          # tie_breaker avoids comparing Delivery objects on equal end_times
-          self._unpaid: list[tuple[datetime, int, Delivery]] = []
-          self._counter = itertools.count()
+      """
+      Design choices:
+        - Decimal for money (float drift would compound across millions of rows).
+        - datetime in UTC for timezone safety; only durations matter.
+        - Running totals updated on write -> dashboard reads are O(1).
+        - Min-heap of unpaid deliveries keyed by end_time -> payUpTo is fast
+          (each delivery is paid exactly once, so it's amortized cheap).
+      """
 
-      def add_driver(self, driver_id: int, usd_hourly_rate: float) -> None:
-          self._drivers[driver_id] = Driver(
-              id=driver_id,
-              hourly_rate=Decimal(str(usd_hourly_rate)),
-          )
+      def __init__(self):
+          # driver_id -> Driver
+          self._drivers = {}
 
-      def record_delivery(
-          self, driver_id: int, start_time: datetime, end_time: datetime
-      ) -> None:
+          # Lifetime aggregate cost across all recorded deliveries.
+          # Maintained incrementally so getTotalCost() is O(1).
+          self._total_cost = Decimal("0")
+
+          # Aggregate cost of deliveries not yet paid.
+          # Maintained incrementally so getTotalCostUnpaid() is O(1).
+          self._total_unpaid = Decimal("0")
+
+          # Min-heap of unpaid deliveries ordered by end_time.
+          # Tuple shape: (end_time, tie_breaker, Delivery)
+          # The tie_breaker (monotonic int) prevents heapq from comparing
+          # Delivery objects when two end_times are exactly equal --
+          # without it, Python would try Delivery < Delivery and crash.
+          self._unpaid = []
+          self._tie_breaker = 0  # increments on every insert -- always unique
+
+          # Keep all deliveries for analytics (Q3 follow-up).
+          # In production this would live in a database, not memory.
+          self._all_deliveries = []
+
+      # -----------------------------------------------------------------------
+      # Q1: addDriver, recordDelivery, getTotalCost
+      # -----------------------------------------------------------------------
+
+      def add_driver(self, driver_id, usd_hourly_rate):
+          """
+          Register a new driver. Per problem statement, the driver is not
+          already in the system, so no duplicate check is required.
+
+          Note on Decimal(str(float)):
+            Decimal(0.1) -> 0.1000000000000000055511151231257827021181583404541015625
+            Decimal("0.1") -> 0.1
+            Going via str avoids inheriting the float's binary noise.
+          """
+          rate = Decimal(str(usd_hourly_rate))
+          self._drivers[driver_id] = Driver(driver_id, rate)
+
+      def record_delivery(self, driver_id, start_time, end_time):
+          """
+          Record a completed delivery. Per problem statement:
+            - driver already exists
+            - inputs are valid (end_time > start_time, duration <= 3h)
+            - called immediately after delivery completes
+          """
           driver = self._drivers[driver_id]
-          duration: timedelta = end_time - start_time
-          hours = Decimal(str(duration.total_seconds())) / Decimal("3600")
+
+          # Duration in fractional hours, computed precisely.
+          duration_seconds = (end_time - start_time).total_seconds()
+          hours = Decimal(str(duration_seconds)) / Decimal("3600")
           cost = driver.hourly_rate * hours
 
           delivery = Delivery(driver_id, start_time, end_time, cost)
+
+          # Update running aggregates and unpaid queue.
           self._total_cost += cost
           self._total_unpaid += cost
-          heappush(self._unpaid, (end_time, next(self._counter), delivery))
 
-      def get_total_cost(self) -> Decimal:           # O(1)
+          # Push onto heap with a unique tie-breaker so heapq never tries
+          # to compare two Delivery objects directly.
+          heappush(self._unpaid, (end_time, self._tie_breaker, delivery))
+          self._tie_breaker += 1
+
+          self._all_deliveries.append(delivery)
+
+      def get_total_cost(self):
+          """O(1) -- dashboard friendly."""
           return self._total_cost
 
-      # ---------- Q2 ----------
-      def pay_up_to(self, pay_time: datetime) -> None:
+      # -----------------------------------------------------------------------
+      # Q2: payUpTo, getTotalCostUnpaid
+      # -----------------------------------------------------------------------
+
+      def pay_up_to(self, pay_time):
+          """
+          Mark every unpaid delivery whose end_time <= pay_time as paid.
+
+          Each delivery is paid exactly once across the system's lifetime,
+          so the total work is O(n log n) amortized -- not per call.
+          """
+          # Peek the smallest end_time; pop while it's within the pay window.
           while self._unpaid and self._unpaid[0][0] <= pay_time:
               _, _, delivery = heappop(self._unpaid)
               self._total_unpaid -= delivery.cost
 
-      def get_total_cost_unpaid(self) -> Decimal:    # O(1)
+      def get_total_cost_unpaid(self):
+          """O(1) -- dashboard friendly."""
           return self._total_unpaid
 
-  4. Quick Sanity Test
+      # -----------------------------------------------------------------------
+      # Q3 (follow-up): max simultaneous deliveries across all drivers
+      # -----------------------------------------------------------------------
 
-  from datetime import datetime, timezone
+      def max_simultaneous_deliveries(self):
+          """
+          Sweep-line algorithm:
+            - Each delivery becomes two events: (start, +1) and (end, -1).
+            - Sort events by time; on ties, process ENDs before STARTs so a
+              delivery ending at T and another starting at T are not counted
+              as simultaneous (they're back-to-back, not overlapping).
+            - Sweep through, tracking the running count of active deliveries.
 
-  sys = DeliverySystem()
-  sys.add_driver(1, 10.00)
+          Complexity: O(n log n) sort, O(n) sweep.
+          """
+          events = []
+          for d in self._all_deliveries:
+              events.append((d.start_time, 1))   # +1 when a delivery starts
+              events.append((d.end_time, -1))    # -1 when a delivery ends
 
-  t0 = datetime(2026, 5, 30, 9, 0, tzinfo=timezone.utc)
-  t1 = t0 + timedelta(hours=1, minutes=30)   # 1.5h * $10 = $15.00
-  sys.record_delivery(1, t0, t1)
+          # Sort by time. Tie-break: -1 (end) before +1 (start) at same instant.
+          # Sorting on (time, delta) puts -1 first because -1 < +1.
+          events.sort(key=lambda e: (e[0], e[1]))
 
-  t2 = t1 + timedelta(hours=2)               # 2h * $10 = $20.00
-  sys.record_delivery(1, t1, t2)
+          active = 0
+          peak = 0
+          for _, delta in events:
+              active += delta
+              if active > peak:
+                  peak = active
+          return peak
 
-  print(sys.get_total_cost())          # 35.00
-  print(sys.get_total_cost_unpaid())   # 35.00
+      def overlap_intervals(self):
+          """
+          Bonus variant: return the actual time ranges during which 2+
+          deliveries are happening simultaneously across the system.
+          """
+          events = []
+          for d in self._all_deliveries:
+              events.append((d.start_time, 1))
+              events.append((d.end_time, -1))
+          events.sort(key=lambda e: (e[0], e[1]))
 
-  sys.pay_up_to(t1)                    # pays only the first delivery
-  print(sys.get_total_cost_unpaid())   # 20.00
-  print(sys.get_total_cost())          # 35.00 (unchanged — total is lifetime)
+          intervals = []
+          active = 0
+          overlap_start = None
+          for time, delta in events:
+              prev = active
+              active += delta
+              # Transition into overlap (1 -> 2)
+              if prev < 2 and active >= 2:
+                  overlap_start = time
+              # Transition out of overlap (2 -> 1)
+              elif prev >= 2 and active < 2 and overlap_start is not None:
+                  intervals.append((overlap_start, time))
+                  overlap_start = None
+          return intervals
+
+
+  # ---------------------------------------------------------------------------
+  # Demo / sanity tests
+  # ---------------------------------------------------------------------------
+
+  def demo():
+      system = DeliverySystem()
+
+      # Two drivers with different rates.
+      system.add_driver(driver_id=1, usd_hourly_rate=10.00)
+      system.add_driver(driver_id=2, usd_hourly_rate=20.00)
+
+      base = datetime(2026, 5, 30, 9, 0, tzinfo=timezone.utc)
+
+      # Driver 1: 1.5h delivery -> $15.00
+      system.record_delivery(1, base, base + timedelta(hours=1, minutes=30))
+
+      # Driver 1: 2h delivery, overlaps the first -> $20.00
+      system.record_delivery(1,
+                             base + timedelta(minutes=30),
+                             base + timedelta(hours=2, minutes=30))
+
+      # Driver 2: 1h delivery, also overlapping -> $20.00
+      system.record_delivery(2,
+                             base + timedelta(hours=1),
+                             base + timedelta(hours=2))
+
+      # ---- Q1 ----
+      print("Total cost:", system.get_total_cost())          # 55.00
+      print("Total unpaid:", system.get_total_cost_unpaid()) # 55.00
+
+      # ---- Q2 ----
+      # Pay everything ending at or before base + 2h.
+      # Covers delivery 1 (ends at +1.5h) and delivery 3 (ends at +2h).
+      # Delivery 2 (ends at +2.5h) remains unpaid.
+      system.pay_up_to(base + timedelta(hours=2))
+      print("After payUpTo(+2h):")
+      print("  Total cost (lifetime):", system.get_total_cost())      # 55.00
+      print("  Total unpaid:", system.get_total_cost_unpaid())        # 20.00
+
+      # ---- Q3 follow-up ----
+      print("Peak simultaneous deliveries:",
+            system.max_simultaneous_deliveries())  # 3 between [+1h, +1.5h]
+      print("Overlap intervals (>=2 active):")
+      for start, end in system.overlap_intervals():
+          print(f"  {start.time()} -> {end.time()}")
+
+
+  if __name__ == "__main__":
+      demo()
+
+
+
+
+
+
+  """
+  Music Player with Star/Unstar + Last N Favourites
+  ==================================================
+  Adds:
+    - star(song_id, user_id)
+    - unstar(song_id, user_id)
+    - get_last_n_favourite_songs(user_id, n)
+  """
+
+  from collections import OrderedDict
+
+  
+  class Song:
+      """A song with a unique-listeners set for O(1) dedup."""
+
+      def __init__(self, song_id, title):
+          self.id = song_id
+          self.title = title
+          self.unique_listeners = set()
+
+      def play_count(self):
+          return len(self.unique_listeners)
+  
+
+  class UserProfile:
+      """
+      Per-user state. Extracted into its own class because the per-user
+      surface area is growing (history + starred + future features).
+      """
+
+      def __init__(self):
+          # Insertion-ordered, dedupe via move_to_end.
+          # Most-recent at the END (consistent with OrderedDict semantics).
+          self.play_history = OrderedDict()
+          self.starred = set()
+
+      def record_play(self, song_id, max_history):
+          """Move-to-end on replay, else insert; cap total history."""
+          if song_id in self.play_history:
+              self.play_history.move_to_end(song_id)
+          else:
+              self.play_history[song_id] = None
+              if len(self.play_history) > max_history:
+                  # Evict oldest (FIFO).
+                  self.play_history.popitem(last=False)
+
+      def star(self, song_id):
+          self.starred.add(song_id)
+
+      def unstar(self, song_id):
+          # discard, not remove -- silent no-op if not starred.
+          self.starred.discard(song_id)
+
+
+  class MusicPlayer:
+      """
+      Catalog + per-user state.
+
+      Design notes on getLastNFavourite:
+        - O(P) worst-case read where P = user's history size.
+        - P is bounded by MAX_HISTORY, so effectively constant.
+        - If profiling showed this as a hot path, I'd add a parallel
+          starred_history OrderedDict updated on play/star/unstar.
+      """
+
+      HISTORY_LIMIT_FOR_LAST_THREE = 3
+      MAX_HISTORY = 1000  # cap per-user history to bound memory
+
+      def __init__(self):
+          self._songs = {}
+          self._next_id = 1
+          self._users = {}  # user_id -> UserProfile
+
+      # --------- internal ---------
+
+      def _profile(self, user_id):
+          if user_id not in self._users:
+              self._users[user_id] = UserProfile()
+          return self._users[user_id]
+
+      # --------- core ---------
+
+      def add_song(self, song_title):
+          song_id = self._next_id
+          self._next_id += 1
+          self._songs[song_id] = Song(song_id, song_title)
+          return song_id
+
+      def play_song(self, song_id, user_id):
+          song = self._songs[song_id]
+          song.unique_listeners.add(user_id)
+          self._profile(user_id).record_play(song_id, self.MAX_HISTORY)
+
+      def print_most_played_songs(self):
+          ranked = sorted(
+              self._songs.values(),
+              key=lambda s: (-s.play_count(), s.id),
+          )
+          for song in ranked:
+              print(song.title)
+
+      # --------- last 3 (original follow-up) ---------
+
+      def get_last_three_songs(self, user_id):
+          """Most-recent first, up to 3."""
+          history = self._profile(user_id).play_history
+          # Take last 3 keys, then reverse so most-recent is first.
+          recent = list(history.keys())[-3:]
+          return list(reversed(recent))
+
+      # --------- new follow-up: star / unstar / last N favourites ---------
+
+      def star(self, song_id, user_id):
+          """Mark a song as favourite for this user. O(1)."""
+          # Validate song exists; silently ignore unknown song_ids
+          # (or raise -- depends on product spec).
+          if song_id in self._songs:
+              self._profile(user_id).star(song_id)
+
+      def unstar(self, song_id, user_id):
+          """Remove favourite mark. O(1). Silent no-op if not starred."""
+          if user_id in self._users:
+              self._users[user_id].unstar(song_id)
+
+      def get_last_n_favourite_songs(self, user_id, n):
+          """
+          Last N unique starred songs the user has played, most-recent first.
+          Semantics: 'starred NOW' (not at play time) -- if user unstars,
+          the song no longer appears.
+
+          Walk play history reverse, filter by starred, stop at N.
+          Complexity: O(P) worst case where P = history size (capped).
+          """
+          if user_id not in self._users:
+              return []
+          profile = self._users[user_id]
+
+          result = []
+          # OrderedDict is iterable; reversed() walks newest -> oldest.
+          for song_id in reversed(profile.play_history):
+              if song_id in profile.starred:
+                  result.append(song_id)
+                  if len(result) == n:
+                      break
+          return result
+
+
+  # ---------------------------------------------------------------------------
+  # Demo
+  # ---------------------------------------------------------------------------
+
+  def demo():
+      mp = MusicPlayer()
+      s1 = mp.add_song("Bohemian Rhapsody")
+      s2 = mp.add_song("Imagine")
+      s3 = mp.add_song("Hotel California")
+      s4 = mp.add_song("Stairway to Heaven")
+      s5 = mp.add_song("Wonderwall")
+
+      user = 100
+  
+      # User plays a sequence; stars some of them.
+      mp.play_song(s1, user)
+      mp.play_song(s2, user)
+      mp.star(s2, user)             # Imagine starred
+      mp.play_song(s3, user)
+      mp.star(s3, user)             # Hotel California starred
+      mp.play_song(s4, user)
+      mp.play_song(s5, user)
+      mp.star(s5, user)             # Wonderwall starred
+
+      # Play history (oldest -> newest): s1, s2, s3, s4, s5
+      # Starred: {s2, s3, s5}
+
+      print("Last 3 songs:", mp.get_last_three_songs(user))
+      # Expected: [s5, s4, s3] -- most recent regardless of stars
+
+      print("Last 2 favourites:", mp.get_last_n_favourite_songs(user, 2))
+      # Expected: [s5, s3] -- most recent starred ones
+
+      print("Last 5 favourites:", mp.get_last_n_favourite_songs(user, 5))
+      # Expected: [s5, s3, s2] -- only 3 starred exist
+
+      # Unstar s3 -> shouldn't appear anymore
+      mp.unstar(s3, user)
+      print("After unstarring s3, last 5 favourites:",
+            mp.get_last_n_favourite_songs(user, 5))
+      # Expected: [s5, s2]
+
+      # Replay s2 -> bumps to most recent in history
+      mp.play_song(s2, user)
+      print("After replaying s2, last 5 favourites:",
+            mp.get_last_n_favourite_songs(user, 5))
+      # Expected: [s2, s5]
+
+
+  if __name__ == "__main__":
+      demo()
+  
+  Expected Output
+
+  Last 3 songs: [5, 4, 3]
+  Last 2 favourites: [5, 3]
+  Last 5 favourites: [5, 3, 2]
+  After unstarring s3, last 5 favourites: [5, 2]
+  After replaying s2, last 5 favourites: [2, 5]
+
+  ---
+  Final Complexity
+  
+  ┌────────────────────────────┬────────────────────────────────────────────┐
+  │           Method           │                 Complexity                 │
+  ├────────────────────────────┼────────────────────────────────────────────┤
+  │ add_song                   │ O(1)                                       │
+  ├────────────────────────────┼────────────────────────────────────────────┤
+  │ play_song                  │ O(1) — set add + OrderedDict move-to-end   │
+  ├────────────────────────────┼────────────────────────────────────────────┤
+  │ print_most_played_songs    │ O(N log N)                                 │
+  ├────────────────────────────┼────────────────────────────────────────────┤
+  │ get_last_three_songs       │ O(1) — slice last 3                        │
+  ├────────────────────────────┼────────────────────────────────────────────┤
+  │ star / unstar              │ O(1)                                       │
+  ├────────────────────────────┼────────────────────────────────────────────┤
+  │ get_last_n_favourite_songs │ O(P) worst case, P = history size (capped) │
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  """
+  Corporate Credit Card Rules Engine
+  ===================================
+  Design:
+    - Rule (abstract base) -> ExpenseRule | TripRule
+    - Engine evaluates ExpenseRules per expense, then groups by trip
+      and evaluates TripRules per group.
+    - Adding a new rule type = subclass Rule, no engine changes (OCP).
+
+  Standard library only: decimal, collections.
+  """
+
+  from decimal import Decimal
+  from collections import defaultdict
+
+
+  # ---------------------------------------------------------------------------
+  # Result type
+  # ---------------------------------------------------------------------------
+
+  class Violation:
+      """Represents one rule failure. Carries enough context for the UI."""
+
+      def __init__(self, rule_id, rule_description, expense_ids, trip_id=None):
+          self.rule_id = rule_id
+          self.rule_description = rule_description
+          self.expense_ids = expense_ids   # list[str]
+          self.trip_id = trip_id           # str | None for trip-level rules
+
+      def __repr__(self):
+          return (f"Violation(rule={self.rule_id}, "
+                  f"expenses={self.expense_ids}, trip={self.trip_id}, "
+                  f"desc='{self.rule_description}')")
+
+  
+  # ---------------------------------------------------------------------------
+  # Rule hierarchy (Strategy pattern)
+  # ---------------------------------------------------------------------------
+
+  class Rule:
+      """Abstract base for all rules."""
+
+      def __init__(self, rule_id, description):
+          self.rule_id = rule_id
+          self.description = description
+
+
+  class ExpenseRule(Rule):
+      """
+      A rule evaluated against a single expense in isolation.
+      Subclasses implement check(expense) -> bool (True = violated).
+      """
+
+      def check(self, expense):
+          raise NotImplementedError
+
+
+  class TripRule(Rule):
+      """
+      A rule evaluated against all expenses belonging to one trip.
+      Subclasses implement check(trip_expenses) -> list[str] of violating
+      expense_ids (empty list = no violation).
+      """
+
+      def check(self, trip_expenses):
+          raise NotImplementedError
+
+
+  # ---------------------------------------------------------------------------
+  # Concrete expense-level rules
+  # ---------------------------------------------------------------------------
+
+  class BanRule(ExpenseRule):
+      """
+      Ban any expense where a given field equals a banned value.
+      Example: BanRule("R1", "expense_type", "airfare")
+      """
+
+      def __init__(self, rule_id, field, banned_value):
+          super().__init__(rule_id, f"{field} cannot be '{banned_value}'")
+          self.field = field
+          self.banned_value = banned_value
+
+      def check(self, expense):
+          return expense.get(self.field) == self.banned_value
+
+
+  class MaxAmountRule(ExpenseRule):
+      """
+      No single expense can exceed a max. Optionally scoped to a field/value
+      (e.g., 'no restaurant expense > $75' = scope on vendor_type=restaurant).
+      """
+
+      def __init__(self, rule_id, max_amount, scope_field=None, scope_value=None):
+          scope_desc = (f" at {scope_field}={scope_value}"
+                        if scope_field else "")
+          super().__init__(rule_id,
+                           f"Single expense{scope_desc} cannot exceed "
+                           f"${max_amount}")
+          self.max_amount = Decimal(str(max_amount))
+          self.scope_field = scope_field
+          self.scope_value = scope_value
+
+      def check(self, expense):
+          # If scoped, only apply when the expense matches the scope.
+          if self.scope_field is not None:
+              if expense.get(self.scope_field) != self.scope_value:
+                  return False
+          amount = Decimal(expense["amount_usd"])
+          return amount > self.max_amount
+
+
+  # ---------------------------------------------------------------------------
+  # Concrete trip-level rules
+  # ---------------------------------------------------------------------------
+
+  class TripTotalLimitRule(TripRule):
+      """Total spend on a trip cannot exceed max_total."""
+
+      def __init__(self, rule_id, max_total):
+          super().__init__(rule_id, f"Trip total cannot exceed ${max_total}")
+          self.max_total = Decimal(str(max_total))
+
+      def check(self, trip_expenses):
+          total = sum((Decimal(e["amount_usd"]) for e in trip_expenses),
+                      Decimal("0"))
+          if total > self.max_total:
+              # Whole trip is in violation -> flag every expense.
+              return [e["expense_id"] for e in trip_expenses]
+          return []
+
+
+  class FieldAggregationLimitRule(TripRule):
+      """
+      Generalized rule: sum of expenses where field == value, per trip,
+      cannot exceed max_total. Powers both:
+        - 'meal expenses cannot exceed $200/trip' (expense_type=meal)
+        - 'expenses at restaurants cannot exceed $X/trip' (vendor_type=restaurant)
+      """
+
+      def __init__(self, rule_id, field, value, max_total):
+          super().__init__(rule_id,
+                           f"Total {field}={value} per trip cannot exceed "
+                           f"${max_total}")
+          self.field = field
+          self.value = value
+          self.max_total = Decimal(str(max_total))
+
+      def check(self, trip_expenses):
+          matching = [e for e in trip_expenses
+                      if e.get(self.field) == self.value]
+          total = sum((Decimal(e["amount_usd"]) for e in matching),
+                      Decimal("0"))
+          if total > self.max_total:
+              return [e["expense_id"] for e in matching]
+          return []
+
+
+  # ---------------------------------------------------------------------------
+  # Rules engine
+  # ---------------------------------------------------------------------------
+
+  class RulesEngine:
+      """
+      Evaluates a list of rules against a list of expenses.
+      Splits rules by category once, then iterates expenses once for
+      per-expense rules and one pass over trip groups for trip rules.
+      """
+
+      def __init__(self, rules):
+          # Partition rules by category up front -> O(R) once, not per expense.
+          self.expense_rules = [r for r in rules if isinstance(r, ExpenseRule)]
+          self.trip_rules = [r for r in rules if isinstance(r, TripRule)]
+
+      def evaluate(self, expenses):
+          violations = []
+
+          # 1. Per-expense rules: O(N * E) where E = number of expense rules.
+          for expense in expenses:
+              for rule in self.expense_rules:
+                  if rule.check(expense):
+                      violations.append(Violation(
+                          rule_id=rule.rule_id,
+                          rule_description=rule.description,
+                          expense_ids=[expense["expense_id"]],
+                          trip_id=expense.get("trip_id"),
+                      ))
+
+          # 2. Group expenses by trip_id once: O(N).
+          trips = defaultdict(list)
+          for expense in expenses:
+              trips[expense["trip_id"]].append(expense)
+
+          # 3. Per-trip rules: O(T * R_t * avg_trip_size).
+          for trip_id, trip_expenses in trips.items():
+              for rule in self.trip_rules:
+                  offending_ids = rule.check(trip_expenses)
+                  if offending_ids:
+                      violations.append(Violation(
+                          rule_id=rule.rule_id,
+                          rule_description=rule.description,
+                          expense_ids=offending_ids,
+                          trip_id=trip_id,
+                      ))
+
+          return violations
+  
+
+  # ---------------------------------------------------------------------------
+  # Function the interview asked for
+  # ---------------------------------------------------------------------------
+
+  def evaluate_rules(rules, expenses):
+      return RulesEngine(rules).evaluate(expenses)
+
+
+  # ---------------------------------------------------------------------------
+  # Demo with the rules from the problem statement
+  # ---------------------------------------------------------------------------
+
+  def demo():
+      rules = [
+          # No restaurant expense > $75
+          MaxAmountRule("R1", 75, scope_field="vendor_type",
+                        scope_value="restaurant"),
+          # No airfare expenses
+          BanRule("R2", "expense_type", "airfare"),
+          # No entertainment expenses
+          BanRule("R3", "expense_type", "entertainment"),
+          # No individual expense > $250
+          MaxAmountRule("R4", 250),
+          # Trip total cannot exceed $2000
+          TripTotalLimitRule("R5", 2000),
+          # Total meal expenses cannot exceed $200 per trip
+          FieldAggregationLimitRule("R6", "expense_type", "meal", 200),
+      ]
+
+      expenses = [
+          {"expense_id": "001", "trip_id": "T1", "amount_usd": "49.99",
+           "expense_type": "client_hosting", "vendor_type": "restaurant",
+           "vendor_name": "Outback"},
+          {"expense_id": "002", "trip_id": "T1", "amount_usd": "120.00",
+           "expense_type": "meal", "vendor_type": "restaurant",
+           "vendor_name": "Chez Panisse"},  # Restaurant > $75 -> R1
+          {"expense_id": "003", "trip_id": "T1", "amount_usd": "300.00",
+           "expense_type": "airfare", "vendor_type": "airline",
+           "vendor_name": "Delta"},  # Banned (R2) AND > $250 (R4)
+          {"expense_id": "004", "trip_id": "T1", "amount_usd": "150.00",
+           "expense_type": "meal", "vendor_type": "restaurant",
+           "vendor_name": "Joe's"},  # Combined with #002 -> meal > $200 (R6)
+      ]
+
+      for v in evaluate_rules(rules, expenses):
+          print(v)
+  
+
+  if __name__ == "__main__":
+      demo()
+
+  Expected Output
+
+  Violation(rule=R1, expenses=['002'], trip=T1, desc='Single expense at vendor_type=restaurant cannot exceed $75')
+  Violation(rule=R2, expenses=['003'], trip=T1, desc='expense_type cannot be 'airfare'')
+  Violation(rule=R4, expenses=['003'], trip=T1, desc='Single expense cannot exceed $250')
+  Violation(rule=R6, expenses=['002', '004'], trip=T1, desc='Total expense_type=meal per trip cannot exceed $200')
+
+  5. Time & Space Complexity
+
+  Let N = number of expenses, R_e = expense rules, R_t = trip rules, T = trips.
+
+  ┌────────────────────────┬────────────────────────────────────────────────────────────┐
+  │       Operation        │                         Complexity                         │
+  ├────────────────────────┼────────────────────────────────────────────────────────────┤
+  │ Partition rules        │ O(R) once at construction                                  │
+  ├────────────────────────┼────────────────────────────────────────────────────────────┤
+  │ Per-expense evaluation │ O(N · R_e)                                                 │
+  ├────────────────────────┼────────────────────────────────────────────────────────────┤
+  │ Group by trip          │ O(N)                                                       │
+  ├────────────────────────┼────────────────────────────────────────────────────────────┤
+  │ Per-trip evaluation    │ O(N · R_t) total (each expense visited once per trip rule) │
+  ├────────────────────────┼────────────────────────────────────────────────────────────┤
+  │ Total                  │ O(N · (R_e + R_t))                                         │
+  └────────────────────────┴────────────────────────────────────────────────────────────┘
+  
+  Space: O(N + V) where V is the number of violations.
+
+  This is linear in expenses × rules — optimal, since each (expense, rule) pair must be checked at least once in the worst case.
+
+
+
+
+  Employee Access Management System
+  ==================================
+  Standard library only: enum, collections.defaultdict.
+  """
+
+  from enum import Enum
+  from collections import defaultdict
+
+
+  class AccessType(Enum):
+      """
+      Access types as an enum for type safety.
+      Adding a new tier (e.g., DELETE) means adding one line here.
+      """
+      READ = "READ"
+      WRITE = "WRITE"
+      ADMIN = "ADMIN"
+
+
+  class AccessManager:
+      """
+      Manages employee -> resource -> access-type mappings.
+
+      Storage: nested dict
+          access_map[employee_id][resource_id] -> set[AccessType]
+
+      All four operations are O(1) (or output-bounded for the retrievers).
+      Empty containers are cleaned up so retrieve_resources never returns
+      resources with no actual access.
+      """
+
+      def __init__(self):
+          # defaultdict(lambda: defaultdict(set)) creates the nested
+          # structure on demand without explicit None-checks.
+          self._access_map = defaultdict(lambda: defaultdict(set))
+
+      def grant_access(self, employee_id, resource_id, access_type):
+          """Grant a specific access type. Idempotent. O(1)."""
+          self._access_map[employee_id][resource_id].add(access_type)
+
+      def revoke_access(self, employee_id, resource_id, access_type=None):
+          """
+          Revoke access. If access_type is None, revoke ALL access for this
+          (employee, resource) pair. Silent no-op if nothing to revoke. O(1).
+
+          Cleans up empty inner structures so retrieve_resources stays correct.
+          """
+          # Quick exit: employee has no grants at all.
+          if employee_id not in self._access_map:
+              return
+          emp_resources = self._access_map[employee_id]
+
+          # Quick exit: employee has no grants for this resource.
+          if resource_id not in emp_resources:
+              self._cleanup_employee(employee_id)
+              return
+
+          if access_type is None:
+              # Revoke all access for this (employee, resource).
+              del emp_resources[resource_id]
+          else:
+              emp_resources[resource_id].discard(access_type)
+              # If the set is now empty, drop the resource entry.
+              if not emp_resources[resource_id]:
+                  del emp_resources[resource_id]
+
+          self._cleanup_employee(employee_id)
+  
+      def retrieve_access(self, employee_id, resource_id):
+          """
+          Return all access types an employee has for a resource.
+          Empty list if none. O(A) where A is the number of access types.
+          """
+          if employee_id not in self._access_map:
+              return []
+          if resource_id not in self._access_map[employee_id]:
+              return []
+          # Sort by enum-defined order for deterministic output.
+          access_set = self._access_map[employee_id][resource_id]
+          return sorted(access_set, key=lambda a: list(AccessType).index(a))
+
+      def retrieve_resources(self, employee_id):
+          """
+          Return all resources an employee has any access to.
+          O(R) where R is the number of resources for this employee.
+          """
+          if employee_id not in self._access_map:
+              return []
+          return list(self._access_map[employee_id].keys())
+
+      # ---------- internal ----------
+
+      def _cleanup_employee(self, employee_id):
+          """If employee has no remaining grants, drop their entry."""
+          if (employee_id in self._access_map
+                  and not self._access_map[employee_id]):
+              del self._access_map[employee_id]
+
+
+  # ---------------------------------------------------------------------------
+  # Demo
+  # ---------------------------------------------------------------------------
+
+  def demo():
+      am = AccessManager()
+
+      # Grant some access
+      am.grant_access("E1", "R1", AccessType.READ)
+      am.grant_access("E1", "R1", AccessType.WRITE)
+      am.grant_access("E1", "R2", AccessType.READ)
+      am.grant_access("E2", "R1", AccessType.ADMIN)
+
+      # Idempotent grant -- granting same access twice is a no-op.
+      am.grant_access("E1", "R1", AccessType.READ)
+
+      print("E1 access to R1:", am.retrieve_access("E1", "R1"))
+      # [READ, WRITE]
+      print("E1 access to R2:", am.retrieve_access("E1", "R2"))  # [READ]
+      print("E1 resources:", am.retrieve_resources("E1"))         # [R1, R2]
+      print("E2 resources:", am.retrieve_resources("E2"))         # [R1]
+      print("E3 resources:", am.retrieve_resources("E3"))         # []
+
+      # Revoke specific access
+      am.revoke_access("E1", "R1", AccessType.READ)
+      print("After revoking READ from E1/R1:")
+      print("  E1 access to R1:", am.retrieve_access("E1", "R1"))  # [WRITE]
+
+      # Revoke all access -- should drop the resource from retrieve_resources
+      am.revoke_access("E1", "R1", None)
+      print("After revoking all from E1/R1:")
+      print("  E1 access to R1:", am.retrieve_access("E1", "R1"))  # []
+      print("  E1 resources:", am.retrieve_resources("E1"))         # [R2]
+
+      # Revoke last remaining access -- E1 should disappear entirely
+      am.revoke_access("E1", "R2", None)
+      print("After revoking E1/R2:")
+      print("  E1 resources:", am.retrieve_resources("E1"))         # []
+
+      # Revoke non-existent access -- silent no-op
+      am.revoke_access("E99", "R99", AccessType.READ)
+      print("Revoking from non-existent employee: no error")
+
+
+  if __name__ == "__main__":
+      demo()
+
+  Expected Output
+
+  E1 access to R1: [<AccessType.READ: 'READ'>, <AccessType.WRITE: 'WRITE'>]
+  E1 access to R2: [<AccessType.READ: 'READ'>]
+  E1 resources: ['R1', 'R2']
+  E2 resources: ['R1']
+  E3 resources: []
+  After revoking READ from E1/R1:
+    E1 access to R1: [<AccessType.WRITE: 'WRITE'>]
+  After revoking all from E1/R1:
+    E1 access to R1: []
+    E1 resources: ['R2']
+  After revoking E1/R2:
+    E1 resources: []
+  Revoking from non-existent employee: no error
+
+
+
+
+
+  """
+  Excel Spreadsheet - LLD Solution (no regex)
+  ============================================
+  Standard library only: no imports needed.
+  """
+
+
+  # ---------------------------------------------------------------------------
+  # Value types (Strategy pattern)
+  # ---------------------------------------------------------------------------
+
+  class CellValue:
+      """Abstract base. Each value type knows how to evaluate itself."""
+
+      def evaluate(self, spreadsheet, evaluating):
+          raise NotImplementedError
+
+
+  class LiteralValue(CellValue):
+      """A plain integer."""
+
+      def __init__(self, value):
+          self.value = value
+
+      def evaluate(self, spreadsheet, evaluating):
+          return self.value
+
+
+  class FormulaValue(CellValue):
+      """
+      A '+'-joined formula. Operands can be integers or cell references.
+      Stored as list of (kind, value) tuples:
+          kind == "int" -> value is int
+          kind == "ref" -> value is cell_id string
+      """
+
+      def __init__(self, operands):
+          self.operands = operands
+
+      def evaluate(self, spreadsheet, evaluating):
+          total = 0
+          for kind, v in self.operands:
+              if kind == "int":
+                  total += v
+              else:
+                  total += spreadsheet._resolve(v, evaluating)
+          return total
+
+
+  # ---------------------------------------------------------------------------
+  # Cell wrapper
+  # ---------------------------------------------------------------------------
+
+  class Cell:
+      """Pairs the raw user string with the parsed CellValue."""
+
+      def __init__(self, raw, value):
+          self.raw = raw
+          self.value = value
+
+
+  # ---------------------------------------------------------------------------
+  # Hand-rolled parsing
+  # ---------------------------------------------------------------------------
+
+  def _is_digit(ch):
+      return '0' <= ch <= '9'
+
+
+  def _is_letter(ch):
+      return 'A' <= ch <= 'Z'
+  
+
+  def _is_signed_integer(token):
+      """
+      Check if token is a valid signed integer like '5', '-3', '-100'.
+      Allows an optional leading '-', then one or more digits.
+      """
+      if not token:
+          return False
+      start = 1 if token[0] == '-' else 0
+      if start == len(token):  # just a '-' with no digits
+          return False
+      for i in range(start, len(token)):
+          if not _is_digit(token[i]):
+              return False
+      return True
+  
+
+  def _is_cell_ref(token):
+      """
+      Check if token is a valid cell reference like 'A1', 'B12', 'AA1'.
+      One or more uppercase letters followed by one or more digits.
+      """
+      if not token:
+          return False
+      i = 0
+      # Consume letters
+      while i < len(token) and _is_letter(token[i]):
+          i += 1
+      if i == 0:
+          return False  # no letters
+      letter_end = i
+      # Consume digits
+      while i < len(token) and _is_digit(token[i]):
+          i += 1
+      # Must have at least one digit, and consumed everything
+      return i > letter_end and i == len(token)
+
+
+  def _parse_operand(token):
+      """Classify a token as int or ref. Raises ValueError if neither."""
+      if _is_signed_integer(token):
+          return ("int", int(token))
+      if _is_cell_ref(token):
+          return ("ref", token)
+      raise ValueError(f"Invalid operand: {token!r}")
+
+
+  def _split_formula(body):
+      """
+      Split formula body on '+' separators.
+      Crucial: '+' is the ONLY separator. '-' is always a sign, never a
+      separator. So splitting on '+' is unambiguous:
+          '-1+-10+2' -> ['-1', '-10', '2']
+          '2+8'      -> ['2', '8']
+          'A1+10'    -> ['A1', '10']
+      """
+      tokens = []
+      current = []
+      for ch in body:
+          if ch == '+':
+              tokens.append(''.join(current))
+              current = []
+          else:
+              current.append(ch)
+      tokens.append(''.join(current))
+      return tokens
+
+
+  def _parse_value(raw):
+      """Parse a raw user string into a CellValue."""
+      if raw.startswith('='):
+          body = raw[1:]
+          tokens = _split_formula(body)
+          operands = [_parse_operand(t) for t in tokens]
+          return FormulaValue(operands)
+      # Plain integer literal
+      if not _is_signed_integer(raw):
+          raise ValueError(f"Invalid literal: {raw!r}")
+      return LiteralValue(int(raw))
+
+
+  # ---------------------------------------------------------------------------
+  # Spreadsheet
+  # ---------------------------------------------------------------------------
+
+  class CycleError(Exception):
+      """Internal exception for cycle detection."""
+
+
+  class Spreadsheet:
+      """
+      Stores cells sparsely. Parses on `set`, evaluates lazily on `print`
+      with memoization within a single print pass and DFS-based cycle detection.
+      """
+
+      def __init__(self):
+          self._cells = {}  # cell_id -> Cell
+
+      def set(self, cell_id, raw_value):
+          """Set or update a cell. Empty string resets the cell."""
+          if raw_value == "":
+              self.reset(cell_id)
+              return
+          value = _parse_value(raw_value)
+          self._cells[cell_id] = Cell(raw_value, value)
+
+      def reset(self, cell_id):
+          """Remove a cell entirely."""
+          self._cells.pop(cell_id, None)
+
+      def print(self):
+          """Print every cell with raw and computed values."""
+          cache = {}  # memoize within this print pass
+          for cell_id in sorted(self._cells.keys()):
+              cell = self._cells[cell_id]
+              computed = self._evaluate_with_cache(cell_id, cache)
+              print(f"{cell_id}: raw='{cell.raw}', computed={computed}")
+
+      # ----- internal -----
+
+      def _evaluate_with_cache(self, cell_id, cache):
+          if cell_id in cache:
+              return cache[cell_id]
+          try:
+              result = self._resolve(cell_id, evaluating=set())
+          except CycleError:
+              result = "ERROR(cycle)"
+          cache[cell_id] = result
+          return result
+
+      def _resolve(self, cell_id, evaluating):
+          """Resolve a cell's value with cycle detection."""
+          if cell_id in evaluating:
+              raise CycleError()
+          if cell_id not in self._cells:
+              # Reference to unset cell -> treat as 0 (Excel convention).
+              return 0
+
+          evaluating.add(cell_id)
+          try:
+              return self._cells[cell_id].value.evaluate(self, evaluating)
+          finally:
+              evaluating.discard(cell_id)
+
+
+  # ---------------------------------------------------------------------------
+  # Demo
+  # ---------------------------------------------------------------------------
+
+  def demo():
+      sheet = Spreadsheet()
+
+      # Basic literals and formulas
+      sheet.set("A1", "10")
+      sheet.set("A2", "-5")
+      sheet.set("B1", "=2+8")
+      sheet.set("B2", "=-1+-10+2")
+      sheet.set("C1", "100")
+
+      print("--- Initial sheet ---")
+      sheet.print()
+
+      print("\n--- After reset(C1) and set(A2, '') ---")
+      sheet.reset("C1")
+      sheet.set("A2", "")
+      sheet.print()
+
+      # Follow-up: references
+      print("\n--- With references ---")
+      sheet.set("D1", "=A1+10")        # 10 + 10 = 20
+      sheet.set("D2", "=A1+B1")        # 10 + 10 = 20
+      sheet.set("D3", "=D1+D2+5")      # 20 + 20 + 5 = 45
+      sheet.print()
+
+      # Cycle
+      print("\n--- With a cycle (E1 -> E2 -> E1) ---")
+      sheet.set("E1", "=E2+1")
+      sheet.set("E2", "=E1+1")
+      sheet.print()
+
+      # Reference to unset cell
+      print("\n--- Reference to unset cell ---")
+      sheet.set("F1", "=Z9+5")
+      sheet.print()
+
+
+  if __name__ == "__main__":
+      demo()
+  
+  Expected Output
+
+  --- Initial sheet ---
+  A1: raw='10', computed=10
+  A2: raw='-5', computed=-5
+  B1: raw='=2+8', computed=10
+  B2: raw='=-1+-10+2', computed=-9
+  C1: raw='100', computed=100
+
+  --- After reset(C1) and set(A2, '') ---
+  A1: raw='10', computed=10
+  B1: raw='=2+8', computed=10
+  B2: raw='=-1+-10+2', computed=-9
+
+  --- With references ---
+  A1: raw='10', computed=10
+  B1: raw='=2+8', computed=10
+  B2: raw='=-1+-10+2', computed=-9
+  D1: raw='=A1+10', computed=20
+  D2: raw='=A1+B1', computed=20
+  D3: raw='=D1+D2+5', computed=45
+
+  --- With a cycle (E1 -> E2 -> E1) ---
+  ... (D-cells unchanged)
+  E1: raw='=E2+1', computed=ERROR(cycle)
+  E2: raw='=E1+1', computed=ERROR(cycle)
+
+  --- Reference to unset cell ---
+  ...
+  F1: raw='=Z9+5', computed=5
+
+  ---
+
+
+
+
+  
+  ┌───────────┬───────────────────────────────────────┐
+  │ Operation │              Complexity               │
+  ├───────────┼───────────────────────────────────────┤
+  │ set       │ O(L) where L = length of raw string   │
+  ├───────────┼───────────────────────────────────────┤
+  │ reset     │ O(1)                                  │
+  ├───────────┼───────────────────────────────────────┤
+  │ print     │ O(C + E) — C cells, E reference edges │
+
+
+
+
+
+
+
+
+
+
+  """
+  Key-Value Store with Transactions
+  ==================================
+  Designed for nested transactions even though one level was asked first --
+  the stack-of-dicts structure handles arbitrary depth with no extra code.
+
+  Standard library only (no imports needed).
+  """
+
+
+  # Sentinel object for "this key was deleted in this transaction layer".
+  # Using a unique singleton object so it can never collide with a user value.
+  _DELETED = object()
+
+
+  class KeyValueStore:
+      """
+      Layered key-value store:
+        - committed: the base store, holds permanent values
+        - tx_stack: list of dicts, one per active transaction layer
+                    (top of stack is the innermost active transaction)
+
+      Each layer maps key -> (value | _DELETED).
+      Lookups walk top-down; the topmost layer wins.
+      """
+
+      def __init__(self):
+          self._committed = {}    # str -> str
+          self._tx_stack = []     # list[dict[str, str | _DELETED]]
+
+      # -----------------------------------------------------------------------
+      # Core operations
+      # -----------------------------------------------------------------------
+
+      def get(self, key):
+          """
+          Return value for key, or empty string if absent.
+          Walks transaction stack top-down so reads see pending writes.
+          """
+          # Walk stack from top (most recent) to bottom (oldest).
+          for layer in reversed(self._tx_stack):
+              if key in layer:
+                  value = layer[key]
+                  # If deleted in this layer, it's gone -- don't fall through.
+                  if value is _DELETED:
+                      return ""
+                  return value
+          # Nothing in transactions; check the committed store.
+          return self._committed.get(key, "")
+
+      def set(self, key, value):
+          """Set a key. Writes to the topmost transaction if active."""
+          if self._tx_stack:
+              self._tx_stack[-1][key] = value
+          else:
+              self._committed[key] = value
+
+      def delete_key(self, key):
+          """Delete a key. Records a sentinel in the topmost transaction."""
+          if self._tx_stack:
+              # Mark as deleted at this layer. Don't touch lower layers --
+              # commit/rollback handles that.
+              self._tx_stack[-1][key] = _DELETED
+          else:
+              self._committed.pop(key, None)
+
+      # -----------------------------------------------------------------------
+      # Transaction operations
+      # -----------------------------------------------------------------------
+
+      def begin(self):
+          """Start a new transaction layer."""
+          self._tx_stack.append({})
+
+      def commit(self):
+          """
+          Apply the topmost transaction's changes to the layer below
+          (or to the committed store if it was the only layer).
+          """
+          if not self._tx_stack:
+              raise RuntimeError("commit called with no active transaction")
+
+          top = self._tx_stack.pop()
+
+          # Where do these changes go? Into the next layer down,
+          # or into the committed store if no layer remains.
+          target = self._tx_stack[-1] if self._tx_stack else self._committed
+
+          for key, value in top.items():
+              if value is _DELETED:
+                  # Apply the deletion to the target.
+                  if target is self._committed:
+                      self._committed.pop(key, None)
+                  else:
+                      # Carry the deletion sentinel up to the parent layer
+                      # so it's still visible there until parent commits.
+                      target[key] = _DELETED
+              else:
+                  target[key] = value
+
+      def rollback(self):
+          """Discard the topmost transaction's changes."""
+          if not self._tx_stack:
+              raise RuntimeError("rollback called with no active transaction")
+          self._tx_stack.pop()
+
+
+  # ---------------------------------------------------------------------------
+  # Demo
+  # ---------------------------------------------------------------------------
+
+  def demo():
+      kv = KeyValueStore()
+
+      # ----- Basic operations (no transaction) -----
+      kv.set("a", "1")
+      kv.set("b", "2")
+      print("get('a'):", kv.get("a"))         # 1
+      print("get('missing'):", kv.get("missing"))  # ''
+      kv.delete_key("a")
+      print("get('a') after delete:", kv.get("a"))  # ''
+
+      # ----- Single transaction with commit -----
+      kv.set("x", "10")
+      kv.begin()
+      kv.set("x", "20")
+      kv.set("y", "30")
+      print("\nInside tx:")
+      print("  get('x'):", kv.get("x"))  # 20  (read-your-writes)
+      print("  get('y'):", kv.get("y"))  # 30
+      kv.commit()
+      print("After commit:")
+      print("  get('x'):", kv.get("x"))  # 20
+      print("  get('y'):", kv.get("y"))  # 30
+
+      # ----- Single transaction with rollback -----
+      kv.begin()
+      kv.set("x", "999")
+      kv.delete_key("y")
+      print("\nInside tx (uncommitted):")
+      print("  get('x'):", kv.get("x"))  # 999
+      print("  get('y'):", kv.get("y"))  # ''
+      kv.rollback()
+      print("After rollback:")
+      print("  get('x'):", kv.get("x"))  # 20  (restored)
+      print("  get('y'):", kv.get("y"))  # 30  (restored)
+
+      # ----- Nested transactions (free, thanks to stack design) -----
+      print("\n--- Nested transactions ---")
+      kv.set("p", "100")
+      kv.begin()                 # outer
+      kv.set("p", "200")
+      kv.begin()                 # inner
+      kv.set("p", "300")
+      print("Inside inner tx, get('p'):", kv.get("p"))  # 300
+      kv.rollback()              # discard inner
+      print("After inner rollback, get('p'):", kv.get("p"))  # 200
+      kv.commit()                # commit outer
+      print("After outer commit, get('p'):", kv.get("p"))    # 200
+
+      # ----- Nested with deletion that bubbles up -----
+      print("\n--- Nested deletion ---")
+      kv.set("q", "alive")
+      kv.begin()
+      kv.delete_key("q")
+      print("Inside tx, get('q'):", kv.get("q"))  # ''
+      kv.begin()
+      kv.set("q", "resurrected")
+      print("Inside inner tx, get('q'):", kv.get("q"))  # resurrected
+      kv.commit()  # inner -> outer (q='resurrected' now)
+      print("After inner commit, get('q'):", kv.get("q"))  # resurrected
+      kv.commit()  # outer -> committed
+      print("After outer commit, get('q'):", kv.get("q"))  # resurrected
+
+
+  if __name__ == "__main__":
+      demo()
+  
+  Expected Output
+
+  get('a'): 1
+  get('missing'):
+  get('a') after delete:
+
+  Inside tx:
+    get('x'): 20
+    get('y'): 30
+  After commit:
+    get('x'): 20
+    get('y'): 30
+
+  Inside tx (uncommitted):
+    get('x'): 999
+    get('y'):
+  After rollback:
+    get('x'): 20
+    get('y'): 30
+
+  --- Nested transactions ---
+  Inside inner tx, get('p'): 300
+  After inner rollback, get('p'): 200
+  After outer commit, get('p'): 200
+
+  --- Nested deletion ---
+  Inside tx, get('q'):
+  Inside inner tx, get('q'): resurrected
+  After inner commit, get('q'): resurrected
+  After outer commit, get('q'): resurrected
+
+  ---
