@@ -68,28 +68,56 @@ print(func([6,2,7,7], 10, 21))
 # Photos: [p10,p2,p3,p4,p5,p6,p7,p8,....]
 # Favourite: [p8,p4,p10]
 
-class PhotoIter:
-    def __init__(self, photos, favourites):
-        self.photos = photos
-        self.favourites = favourites
-        self.p_idx = 0
-        self.f_idx = 0
-    
-    def __iter__(self):
-        while self.f_idx < len(self.favourites):
-            yield self.favourites[self.f_idx]
-            self.f_idx += 1
-        while self.p_idx < len(self.photos):
-            curr = self.photos[self.p_idx]
-            if curr not in self.favourites:
-                yield curr
-            self.p_idx += 1
+class PhotoIterator:
+      """
+      Yields favourites first (in given order), then non-favourite photos
+      (in given order). True iterator -- doesn't materialize the full list.
 
-photos = ['p10', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8']
-favourites = [ 'p4','p8', 'p10']
-photo = PhotoIter(photos, favourites)
-res = list(photo)
-print(res)
+      Time: O(F + P) total across all next() calls
+      Space: O(F) for the hashset
+      """
+
+      def __init__(self, photos, favourites):
+          self._favourites = favourites              # iterate first
+          self._photos = photos                      # iterate second
+          self._fav_set = set(favourites)            # O(1) skip check
+
+          # Two phase pointers.
+          self._fav_idx = 0
+          self._photo_idx = 0
+
+      def __iter__(self):
+          return self
+  
+      def __next__(self):
+          # Phase A: yield favourites in given order.
+          if self._fav_idx < len(self._favourites):
+              value = self._favourites[self._fav_idx]
+              self._fav_idx += 1
+              return value
+
+          # Phase B: yield photos that aren't favourites.
+          while self._photo_idx < len(self._photos):
+              value = self._photos[self._photo_idx]
+              self._photo_idx += 1
+              if value not in self._fav_set:
+                  return value
+
+          # Both phases exhausted.
+          raise StopIteration
+
+
+def demo_part1():
+      photos = ["p10", "p2", "p3", "p4", "p5", "p6", "p7", "p8"]
+      favourites = ["p8", "p4", "p10"]
+
+      it = PhotoIterator(photos, favourites)
+      print(list(it))
+      # Expected: ['p8', 'p4', 'p10', 'p2', 'p3', 'p5', 'p6', 'p7']
+
+
+if __name__ == "__main__":
+      demo_part1()
 
 # Lock tolerance 
 
