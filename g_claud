@@ -1,0 +1,170 @@
+# Normal nodes : with two children
+# Leaf nodes : no children
+# Special nodes : only one children.
+# Multiple consecutive Special nodes make a Special nodes Chain. like (a → b → c) are the node chain, so length is 3 here.
+# Followup: return all the unique chain lengths and its count in the tree.
+#TC: SC:# O(N)
+from collections import defaultdict
+  
+
+class TreeNode:
+    def __init__(self, val=0, left=None, right=None):
+          self.val = val
+          self.left = left
+          self.right = right
+
+
+def analyze_special_chains(root):
+      """
+      Return a dict: chain_length -> number of chains of that length.
+
+      Single DFS pass. O(N) time, O(H) recursion depth where H = tree height.
+      For balanced trees H = log N; for skewed H = N. Switch to iterative
+      DFS for huge skewed trees to avoid stack overflow.
+      """
+      chain_counts = defaultdict(int)
+
+def dfs(node, current_chain):
+    if node is None:
+        return
+  
+    child_count = (node.left is not None) + (node.right is not None)
+    
+    if child_count == 1:
+    # Special node - extend the chain.
+        child = node.left if node.left is not None else node.right
+        dfs(child, current_chain + 1)
+    else:
+    # Chain ends here (either at a leaf or a normal node).
+        if current_chain > 0:
+            chain_counts[current_chain] += 1
+    # If normal node, recurse into both children, each starting fresh.
+    if child_count == 2:
+      dfs(node.left, 0)
+      dfs(node.right, 0)
+    
+    dfs(root, 0)
+    return dict(chain_counts)
+
+
+def max_chain_length(root):
+      """Convenience wrapper: just the max chain length."""
+      counts = analyze_special_chains(root)
+      return max(counts.keys()) if counts else 0
+
+
+  # ---------------------------------------------------------------------
+  # Iterative version for huge skewed trees (Part 2 follow-up)
+  # ---------------------------------------------------------------------
+
+def analyze_special_chains_iterative(root):
+      """
+      Same as above but iterative -- O(1) extra recursion depth.
+      Uses an explicit stack of (node, current_chain) pairs.
+
+      Critical for huge skewed trees where recursion would blow the stack.
+      """
+      if root is None:
+          return {}
+
+      chain_counts = defaultdict(int)
+      stack = [(root, 0)]  # (node, current_chain)
+
+      while stack:
+          node, current_chain = stack.pop()
+  
+          child_count = (node.left is not None) + (node.right is not None)
+
+          if child_count == 1:
+              child = node.left if node.left is not None else node.right
+              stack.append((child, current_chain + 1))
+          else:
+              if current_chain > 0:
+                  chain_counts[current_chain] += 1
+              if child_count == 2:
+                  stack.append((node.left, 0))
+                  stack.append((node.right, 0))
+
+      return dict(chain_counts)
+  
+
+  # ---------------------------------------------------------------------
+  # Demo
+  # ---------------------------------------------------------------------
+
+def demo():
+      # Build this tree:
+      #
+      #            1 (normal)
+      #           / \
+      #          2   3 (special - only right child)
+      #         / \   \
+      #        4   5   6 (special)
+      #       /         \
+      #      7           7 (special)
+      #     /             \
+      #    8               8 (leaf)
+      #     \
+      #      9 (leaf)
+      #
+      # Let me build it more explicitly:
+      #
+      # root = 1 (normal: 2 children)
+      #   left subtree rooted at 2:
+      #     2 is normal (children 4, 5)
+      #       4 is special (only left child 7)
+      #         7 is special (only left child 8)
+      #           8 is special (only right child 9)
+      #             9 is leaf
+      #     5 is leaf
+      #   right subtree rooted at 3:
+      #     3 is special (only right child 6)
+      #       6 is special (only right child 10)
+      #         10 is leaf
+
+      n9 = TreeNode(9)
+      n8 = TreeNode(8, right=n9)         # special (1 child)
+      n7 = TreeNode(7, left=n8)          # special (1 child)
+      n4 = TreeNode(4, left=n7)          # special (1 child)
+      n5 = TreeNode(5)                   # leaf
+      n2 = TreeNode(2, left=n4, right=n5)  # normal
+
+      n10 = TreeNode(10)
+      n6 = TreeNode(6, right=n10)        # special
+      n3 = TreeNode(3, right=n6)         # special
+
+      root = TreeNode(1, left=n2, right=n3)  # normal
+
+      print("Chain counts:", analyze_special_chains(root))
+      # Chain at 4-7-8: length 3
+      # Chain at 3-6: length 2
+      # Expected: {3: 1, 2: 1}
+
+      print("Max chain length:", max_chain_length(root))  # 3
+
+      # Verify iterative gives same result
+      print("Iterative version:",
+            analyze_special_chains_iterative(root))
+
+      # Edge cases
+      print("\nEmpty tree:", analyze_special_chains(None))     # {}
+      print("Single leaf:", analyze_special_chains(TreeNode(1)))  # {}
+
+      # Single special node
+      leaf = TreeNode(2)
+      single_special = TreeNode(1, left=leaf)
+      print("Single special node:",
+            analyze_special_chains(single_special))            # {1: 1}
+
+      # All-special chain
+      chain = TreeNode(5)
+      for i in range(4, 0, -1):
+          chain = TreeNode(i, left=chain)
+      # 1 -> 2 -> 3 -> 4 -> 5(leaf): chain of 4 specials
+      print("All-special chain of 4:",
+            analyze_special_chains(chain))                     # {4: 1}
+
+
+if __name__ == "__main__":
+      demo()
+  
