@@ -168,3 +168,708 @@ def demo():
 if __name__ == "__main__":
       demo()
   
+
+
+# You're given a list of elements. Each element has a unique id and 3 properties. Two elements ar
+# Please write a function that takes the input and returns all the duplicates.
+
+# E1: id1, p1, p2, p3|
+# E2: id2, p1, p4, p5
+# E3: id3, p6, p7, p8
+# in this example we should return {{idl, id2}, {id3}}
+# The time complexity for building the adjacency list is O(n * m).
+# The DFS part takes O(n * m), since in the worst case, every email has a connection with others
+
+
+from collections import defaultdict
+def func(accounts):
+    def dfs(email):
+        seen.add(email)
+        arr.append(email)
+        for i in emails[email]:
+            if i not in seen:
+                dfs(i)
+                
+    emails = defaultdict(list)
+    names = defaultdict(str)
+    for element in accounts:
+        id = element[0]
+        for p in element[1:]:
+            if p in names:
+                emails[id].append(names[p])
+                emails[names[p]].append(id)
+            else:
+                names[p] = id
+    # print(emails, names)
+    seen = set()
+    res = []
+    for element in accounts:
+        if element[0] not in seen:
+            arr = []
+            dfs(element[0])
+            
+            res.append(arr)
+    # print(res)
+    return res
+data = [['id1', 'p1', 'p2', 'p3'],['id2', 'p1', 'p4', 'p5'],['id3', 'p6', 'p7', 'p8']]
+print(func(data))
+
+
+  """
+  Group elements where two are 'duplicates' if they share any property.
+  Transitive: if E1 ~ E2 and E2 ~ E3, then E1 ~ E3.
+
+  Standard library only.
+  """
+  
+  from collections import defaultdict
+
+
+  class DSU:
+      """Disjoint Set Union with path compression and union by rank."""
+
+      def __init__(self):
+          self._parent = {}
+          self._rank = {}
+
+      def make_set(self, x):
+          if x not in self._parent:
+              self._parent[x] = x
+              self._rank[x] = 0
+
+      def find(self, x):
+          # Iterative path compression -- safe for huge inputs.
+          self.make_set(x)
+          root = x
+          while self._parent[root] != root:
+              root = self._parent[root]
+          # Compress path.
+          current = x
+          while self._parent[current] != root:
+              nxt = self._parent[current]
+              self._parent[current] = root
+              current = nxt
+          return root
+
+      def union(self, x, y):
+          rx, ry = self.find(x), self.find(y)
+          if rx == ry:
+              return
+          # Union by rank: shorter tree under taller.
+          if self._rank[rx] < self._rank[ry]:
+              self._parent[rx] = ry
+          elif self._rank[rx] > self._rank[ry]:
+              self._parent[ry] = rx
+          else:
+              self._parent[ry] = rx
+              self._rank[rx] += 1
+
+
+  def find_duplicate_groups(elements):
+      """
+      Group element IDs by transitive property-sharing.
+
+      Args:
+          elements: list of (id, [props]) tuples
+
+      Returns:
+          list of lists -- each inner list is one group of element IDs,
+          in input order.
+
+      Time: O(N * K * alpha(N)) where K = avg properties per element.
+      Space: O(N + total_properties)
+      """
+      dsu = DSU()
+      prop_owner = {}                # property -> first element seen with it
+      insertion_order = []           # preserve element order
+
+      for elem_id, props in elements:
+          dsu.make_set(elem_id)
+          insertion_order.append(elem_id)
+          for p in props:
+              if p in prop_owner:
+                  # This property was claimed -- union with its owner.
+                  dsu.union(elem_id, prop_owner[p])
+              else:
+                  # First time seeing this property -- claim it.
+                  prop_owner[p] = elem_id
+
+      # Group element IDs by their DSU root, preserving insertion order.
+      root_to_group = defaultdict(list)
+      for elem_id in insertion_order:
+          root = dsu.find(elem_id)
+          root_to_group[root].append(elem_id)
+
+      # Return groups in the order their first element was inserted.
+      seen_roots = set()
+      result = []
+      for elem_id in insertion_order:
+          root = dsu.find(elem_id)
+          if root not in seen_roots:
+              seen_roots.add(root)
+              result.append(root_to_group[root])
+      return result
+  
+
+  # ---------------------------------------------------------------------
+  # Demo
+  # ---------------------------------------------------------------------
+
+  def demo():
+      # Example 1: E1 and E2 share p1; E3 shares nothing -> {{id1, id2}, {id3}}
+      elements_1 = [
+          ("id1", ["p1", "p2", "p3"]),
+          ("id2", ["p1", "p4", "p5"]),
+          ("id3", ["p6", "p7", "p8"]),
+      ]
+      print("Example 1:")
+      print(f"  Result: {find_duplicate_groups(elements_1)}")
+      # Expected: [['id1', 'id2'], ['id3']]
+
+      # Example 2: E1-E2 share p1; E2-E3 share p5; transitive -> {{id1, id2, id3}}
+      elements_2 = [
+          ("id1", ["p1", "p2", "p3"]),
+          ("id2", ["p1", "p4", "p5"]),
+          ("id3", ["p5", "p7", "p8"]),
+      ]
+      print("\nExample 2 (transitive):")
+      print(f"  Result: {find_duplicate_groups(elements_2)}")
+      # Expected: [['id1', 'id2', 'id3']]
+
+      # Edge case: all elements isolated
+      elements_3 = [
+          ("id1", ["a", "b", "c"]),
+          ("id2", ["d", "e", "f"]),
+          ("id3", ["g", "h", "i"]),
+      ]
+      print("\nEdge case (all isolated):")
+      print(f"  Result: {find_duplicate_groups(elements_3)}")
+      # Expected: [['id1'], ['id2'], ['id3']]
+
+      # Edge case: all in one group via chain
+      elements_4 = [
+          ("id1", ["a", "b", "c"]),
+          ("id2", ["c", "d", "e"]),  # shares 'c' with id1
+          ("id3", ["e", "f", "g"]),  # shares 'e' with id2
+          ("id4", ["g", "h", "i"]),  # shares 'g' with id3
+      ]
+      print("\nEdge case (chain through shared properties):")
+      print(f"  Result: {find_duplicate_groups(elements_4)}")
+      # Expected: [['id1', 'id2', 'id3', 'id4']]
+
+      # Edge case: hub property connecting many elements
+      elements_5 = [
+          ("id1", ["hub", "a", "b"]),
+          ("id2", ["hub", "c", "d"]),
+          ("id3", ["hub", "e", "f"]),
+          ("id4", ["g", "h", "i"]),  # isolated
+      ]
+      print("\nEdge case (hub property):")
+      print(f"  Result: {find_duplicate_groups(elements_5)}")
+      # Expected: [['id1', 'id2', 'id3'], ['id4']]
+
+      # Edge case: empty input
+      print("\nEdge case (empty input):")
+      print(f"  Result: {find_duplicate_groups([])}")
+      # Expected: []
+
+
+  if __name__ == "__main__":
+      demo()
+
+
+
+# return the mean value of the last N elements, excluding the largest K elements.
+
+from collections import deque
+from sortedcontainers import SortedList
+
+
+class StreamingMeanExcludingTopK:
+      """
+      Maintains a sliding window of the last N elements, computing
+      the mean excluding the largest K on every insert.
+      """
+
+      def __init__(self, n, k):
+          if k >= n:
+              raise ValueError("k must be < n")
+          self._n = n
+          self._k = k
+          self._window = deque()        # FIFO of last N elements
+          self._sorted = SortedList()   # the same elements in sorted order
+
+      def add(self, value):
+          """Insert a new element; return the current mean excluding top-K."""
+          # Evict the oldest if window is full.
+          if len(self._window) == self._n:
+              old = self._window.popleft()
+              self._sorted.remove(old)
+
+          self._window.append(value)
+          self._sorted.add(value)
+
+          return self._mean_excluding_top_k()
+
+      def _mean_excluding_top_k(self):
+          """Mean of bottom (size - k) elements. Returns 0 if size <= k."""
+          size = len(self._sorted)
+          denom = size - self._k
+          if denom <= 0:
+              return 0.0  # or None; per problem spec
+          # Sum the smallest (size - k) elements.
+          bottom_sum = sum(self._sorted[:denom])
+          return bottom_sum / denom
+
+
+  # ---------------------------------------------------------------------
+  # Demo
+  # ---------------------------------------------------------------------
+
+def demo_v1():
+      stream = [20, 2, -2, 0, 10, 1, 5, -2, 0]
+      sm = StreamingMeanExcludingTopK(n=5, k=2)
+
+      print("Stream | Window | Result")
+      for v in stream:
+          result = sm.add(v)
+          print(f"  {v:3} | {list(sm._window)} | {result:.4f}")
+
+      # Final result for last 5 = [10, 1, 5, -2, 0]
+      # Drop top 2: [10, 5]
+      # Mean of [1, -2, 0] = -0.3333
+
+
+if __name__ == "__main__":
+      demo_v1()
+
+
+
+
+
+apply string substitutions 
+class CycleError(Exception):
+      """Raised when the replacement graph contains a cycle."""
+
+
+def substitute(replacements, text):
+      """
+      Replace every %key% in text with mapping[key], recursively expanding
+      nested references in values. Raises CycleError if the replacement
+      graph contains a cycle.
+
+      Time:  O(total input size + total resolved size)
+      Space: O(K + total resolved size)
+      """
+      # Build a plain dict from the input form (list of pairs or dict).
+      mapping = dict(replacements) if isinstance(replacements, list) else replacements
+
+      # Memoize fully-resolved values for each key.
+      resolved = {}
+      in_progress = set()
+
+      def resolve_key(key):
+          if key in resolved:
+              return resolved[key]
+          if key in in_progress:
+              raise CycleError(f"Cycle detected involving key '{key}'")
+          if key not in mapping:
+              raise KeyError(f"Unknown placeholder '%{key}%'")
+
+          in_progress.add(key)
+          try:
+              result = expand(mapping[key])
+          finally:
+              in_progress.discard(key)
+
+          resolved[key] = result
+          return result
+  
+      def expand(template):
+          """
+          Walk template character-by-character, replacing every %key%
+          with its fully-resolved value (recursive call to resolve_key).
+          Returns a new string with no remaining placeholders.
+          """
+          out = []
+          i = 0
+          n = len(template)
+          while i < n:
+              if template[i] == '%':
+                  # Find the matching closing %.
+                  end = template.find('%', i + 1)
+                  if end == -1:
+                      # Unmatched % -- treat as literal.
+                      out.append(template[i])
+                      i += 1
+                      continue
+                  key = template[i + 1:end]
+                  if key == '':
+                      # Empty %% -- treat as literal % (or whatever convention).
+                      out.append('%')
+                      i += 1
+                      continue
+                  # Recursively resolve and append.
+                  out.append(resolve_key(key))
+                  i = end + 1
+              else:
+                  out.append(template[i])
+                  i += 1
+          return ''.join(out)
+
+      return expand(text)
+
+
+  # ---------------------------------------------------------------------
+  # Demo
+  # ---------------------------------------------------------------------
+
+def demo():
+      # Example 1
+      replacements = [["A", "abc"], ["B", "def"]]
+      text = "%A%_%B%"
+      print(f"Example 1: {substitute(replacements, text)}")
+      # Expected: abc_def
+
+      # Example 2 (with nested reference)
+      replacements = {"USER": "admin", "HOME": "/%USER%/home"}
+      text = "I am %USER% My home is %HOME%"
+      print(f"Example 2: {substitute(replacements, text)}")
+      # Expected: I am admin My home is /admin/home
+
+      # Deep nesting
+      replacements = {
+          "A": "1%B%",
+          "B": "2%C%",
+          "C": "3%D%",
+          "D": "4",
+      }
+      print(f"Deep nesting: {substitute(replacements, '%A%')}")
+      # Expected: 1234
+
+      # Repeated reference (memoization saves work)
+      replacements = {
+          "X": "%Y%-%Y%",
+          "Y": "%Z%",
+          "Z": "hello",
+      }
+      print(f"Repeated reference: {substitute(replacements, '%X%')}")
+      # Expected: hello-hello
+
+      # Cycle detection
+      replacements = {"A": "%B%", "B": "%A%"}
+      try:
+          substitute(replacements, "%A%")
+      except CycleError as e:
+          print(f"Cycle detected: {e}")
+
+      # Unknown placeholder
+      replacements = {"A": "abc"}
+      try:
+          substitute(replacements, "%Z%")
+      except KeyError as e:
+          print(f"Unknown placeholder: {e}")
+
+      # No placeholders -- text returned unchanged
+      print(f"No placeholders: {substitute({}, 'hello world')}")
+      # Expected: hello world
+
+
+if __name__ == "__main__":
+      demo()
+
+
+# bank transaction
+
+ # ---------------------------------------------------------------------
+  # O(N) sliding window with monotonic deque
+  # ---------------------------------------------------------------------
+
+  def max_customers_optimal(initial, arr):
+      """
+      Sliding window approach. We want the longest contiguous window [L, R]
+      such that initial + every prefix sum starting at L stays >= 0.
+
+      Equivalently: min(prefix[L+1..R+1]) >= prefix[L] - initial,
+      where prefix[i] = sum(arr[0..i-1]).
+
+      Use a monotonic deque to track min prefix sum in O(1) per query.
+
+      Time: O(N), Space: O(N).
+      """
+      n = len(arr)
+      if n == 0:
+          return 0
+
+      # Compute prefix sums. prefix[i] = sum(arr[0..i-1]).
+      prefix = [0] * (n + 1)
+      for i in range(n):
+          prefix[i + 1] = prefix[i] + arr[i]
+
+      # Sliding window over [L..R] (inclusive in arr-indices).
+      # Monotonic deque holds indices into prefix array, sorted by value.
+      # Front = index of minimum prefix value in current window.
+      L = 0
+      max_count = 0
+      min_deque = deque()  # indices into prefix, values increasing
+
+      for R in range(n):
+          # Add prefix[R+1] to the deque, maintaining increasing order.
+          while min_deque and prefix[min_deque[-1]] >= prefix[R + 1]:
+              min_deque.pop()
+          min_deque.append(R + 1)
+
+          # Shrink from left while constraint violated.
+          # Constraint: min(prefix[L+1..R+1]) >= prefix[L] - initial
+          while min_deque and prefix[min_deque[0]] < prefix[L] - initial:
+              L += 1
+              # Remove deque entries that are now outside the window.
+              while min_deque and min_deque[0] < L + 1:
+                  min_deque.popleft()
+              if L > R:
+                  break
+
+          if L <= R:
+              count = R - L + 1
+              if count > max_count:
+                  max_count = count
+
+      return max_count
+
+
+  # ---------------------------------------------------------------------
+  # Demo
+  # ---------------------------------------------------------------------
+
+  def demo():
+      # Example from problem
+      initial = 1
+      arr = [1, -3, 5, -2, 1]
+      print(f"initial={initial}, arr={arr}")
+      print(f"  Brute:   {max_customers_brute(initial, arr)}")
+      print(f"  Optimal: {max_customers_optimal(initial, arr)}")
+      # Expected: 3 (start at index 2: 1+5=6, 6-2=4, 4+1=5)
+
+      # Another test
+      initial = 0
+      arr = [5, -3, 2, -10, 4, 1]
+      print(f"\ninitial={initial}, arr={arr}")
+      print(f"  Brute:   {max_customers_brute(initial, arr)}")
+      print(f"  Optimal: {max_customers_optimal(initial, arr)}")
+      # Best window: probably [4, 5] (start 4: 0+4=4, 4+1=5) -> 2 customers
+      # Or [0, 1, 2]: 0+5=5, 5-3=2, 2+2=4 -> 3 customers (then -10 fails)
+      # Expected: 3
+
+      # All deposits
+      initial = 0
+      arr = [1, 2, 3, 4, 5]
+      print(f"\ninitial={initial}, arr={arr}")
+      print(f"  Brute:   {max_customers_brute(initial, arr)}")
+      print(f"  Optimal: {max_customers_optimal(initial, arr)}")
+      # Expected: 5
+
+      # All withdrawals, no money
+      initial = 0
+      arr = [-1, -2, -3]
+      print(f"\ninitial={initial}, arr={arr}")
+      print(f"  Brute:   {max_customers_brute(initial, arr)}")
+      print(f"  Optimal: {max_customers_optimal(initial, arr)}")
+      # Expected: 0
+
+      # Empty
+      print(f"\nempty: {max_customers_brute(10, [])}")  # 0
+
+
+  if __name__ == "__main__":
+      demo()
+
+
+
+
+
+
+#cut the edges in such a way that all the leaf nodes get disconnected from root 
+
+class TreeNode:
+      """Binary tree node with weighted edges to children."""
+
+      def __init__(self, val):
+          self.val = val
+          self.left = None
+          self.right = None
+          # Edge weights from this node to each child.
+          self.left_weight = 0
+          self.right_weight = 0
+
+
+def min_cost_to_disconnect_leaves(root):
+      """
+      Returns the minimum total edge-cost to ensure no leaf has a path
+      to the root.
+
+      Recurrence:
+        For each child:
+          option A: cut the edge between this node and child (cost = weight)
+          option B: cut deeper inside child's subtree (cost = min_cost(child))
+          Pick the smaller.
+
+        Sum over all children.
+
+        Leaves return infinity to force the parent to cut the edge above.
+
+      Time: O(N), Space: O(H) recursion depth.
+      """
+      if root is None:
+          return 0
+
+      def dfs(node):
+          # If this node has no children -> it's a leaf -> caller must cut
+          # the edge to it. Return infinity so parent's min(edge, leaf) = edge.
+          if node.left is None and node.right is None:
+              return math.inf
+
+          total = 0
+
+          if node.left is not None:
+              child_cost = dfs(node.left)
+              total += min(node.left_weight, child_cost)
+
+          if node.right is not None:
+              child_cost = dfs(node.right)
+              total += min(node.right_weight, child_cost)
+
+          return total
+  
+      result = dfs(root)
+      # If the root itself is a leaf, there's nothing to disconnect.
+      return 0 if result == math.inf else result
+
+
+  # ---------------------------------------------------------------------
+  # Iterative version (for huge skewed trees)
+  # ---------------------------------------------------------------------
+
+def min_cost_iterative(root):
+      """
+      Same algorithm, iterative DFS with explicit stack.
+      Safe for huge skewed trees that would blow recursion limits.
+      """
+      if root is None:
+          return 0
+
+      # Post-order traversal: process children before parent.
+      # We use the standard "two-stack" or "visited flag" pattern.
+      cost = {}                       # node id -> min_cost
+      stack = [(root, False)]
+
+      while stack:
+          node, processed = stack.pop()
+          if processed:
+              # Compute this node's cost using its children's costs.
+              if node.left is None and node.right is None:
+                  cost[id(node)] = math.inf
+                  continue
+
+              total = 0
+              if node.left is not None:
+                  total += min(node.left_weight, cost[id(node.left)])
+              if node.right is not None:
+                  total += min(node.right_weight, cost[id(node.right)])
+              cost[id(node)] = total
+          else:
+              # Re-push self with processed flag, then push children.
+              stack.append((node, True))
+              if node.right is not None:
+                  stack.append((node.right, False))
+              if node.left is not None:
+                  stack.append((node.left, False))
+
+      result = cost[id(root)]
+      return 0 if result == math.inf else result
+
+
+  # ---------------------------------------------------------------------
+  # Demo
+  # ---------------------------------------------------------------------
+
+def demo():
+      # Example from problem:
+      #     6
+      #    / \
+      #  5/   \2
+      #  4     2 (leaf)
+      #  |
+      # 1|
+      #  1 (leaf)
+
+      root = TreeNode(6)
+      root.left = TreeNode(4)
+      root.right = TreeNode(2)
+      root.left_weight = 5
+      root.right_weight = 2
+
+      root.left.left = TreeNode(1)
+      root.left.left_weight = 1
+
+      print(f"Recursive: {min_cost_to_disconnect_leaves(root)}")  # 3
+      print(f"Iterative: {min_cost_iterative(root)}")              # 3
+
+      # Edge case: single leaf root
+      leaf = TreeNode(1)
+      print(f"Single leaf: {min_cost_to_disconnect_leaves(leaf)}")  # 0
+
+      # Edge case: cheap deep cut
+      #     A
+      #     |10
+      #     B
+      #     |1
+      #     C (leaf)
+      # Optimal: cut B-C for cost 1
+      a = TreeNode("A")
+      a.left = TreeNode("B")
+      a.left_weight = 10
+      a.left.left = TreeNode("C")
+      a.left.left_weight = 1
+      print(f"Linear chain: {min_cost_to_disconnect_leaves(a)}")  # 1
+
+      # Edge case: cheap top cut
+      # Same shape, weights swapped:
+      #     A
+      #     |1
+      #     B
+      #     |10
+      #     C (leaf)
+      # Optimal: cut A-B for cost 1
+      a = TreeNode("A")
+      a.left = TreeNode("B")
+      a.left_weight = 1
+      a.left.left = TreeNode("C")
+      a.left.left_weight = 10
+      print(f"Reverse weights: {min_cost_to_disconnect_leaves(a)}")  # 1
+
+      # Multiple leaves under same internal node
+      #     A
+      #    / \
+      #  3/   \5
+      #  B     C (leaf)
+      # /\
+      #1 1
+      # leaves
+      # Optimal at B: must cut both leaf edges (1+1=2) OR cut A-B (cost 3).
+      # min(3, 2) = 2. Plus edge A-C must be cut (cost 5).
+      # Total: 2 + 5 = 7
+      a = TreeNode("A")
+      a.left = TreeNode("B")
+      a.right = TreeNode("C")
+      a.left_weight = 3
+      a.right_weight = 5
+      a.left.left = TreeNode("L1")
+      a.left.right = TreeNode("L2")
+      a.left.left_weight = 1
+      a.left.right_weight = 1
+      print(f"Multi-leaf: {min_cost_to_disconnect_leaves(a)}")  # 7
+
+
+if __name__ == "__main__":
+      demo()
+
