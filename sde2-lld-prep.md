@@ -26,7 +26,7 @@ Every problem follows this script:
 
 ## Table of Contents
 
-1. [Food Delivery Payments](#1-food-delivery-payments) — heap + running totals
+1. [Delivery Cost Tracking](#1-delivery-cost-tracking) — running totals (read-write asymmetry)
 2. [Corporate Rules Engine](#2-corporate-rules-engine) — Strategy / Open-Closed
 3. [Music Player (Spotify)](#3-music-player-spotify) — Set + OrderedDict
 4. [Employee Access Management](#4-employee-access-management) — nested dict + Set
@@ -35,51 +35,284 @@ Every problem follows this script:
 
 ---
 
-# 1. Food Delivery Payments
+# 1. Delivery Cost Tracking
 
 ## Problem
 
-Food delivery system with thousands of drivers, each paid an hourly rate based on delivery duration. Drivers can have overlapping deliveries.
+A logistics company employs thousands of drivers. Track their work and calculate costs.
 
 ```
-addDriver(driverId, usdHourlyRate)
-recordDelivery(driverId, startTime, endTime)
-getTotalCost()                  // live dashboard - hot path
-payUpTo(payTime)                // mark deliveries paid up to a given time
-getTotalCostUnpaid()            // live dashboard
+add_driver(driverId)
+add_delivery(driverId, startTime, endTime)
+get_total_cost()
 ```
 
-## Speaking Script
+Requirement expansions during the interview:
+- **Phase 2:** `pay_up_to_time(timestamp)`, `get_cost_to_be_paid()`
+- **Phase 3:** `get_max_active_drivers_in_last_24_hours(currentTime)`
 
-**[Clarify]** "Dashboard polls reads constantly — reads are the hot path. Inputs valid per prompt. Money in USD. Single-threaded.
+## What This Interview Tests
 
-**[Types]** "Time as UTC datetime — timezone-safe, microsecond precision. Money as `Decimal` — float drift compounds. Drivers in a `dict` for O(1) lookup.
+The interviewer is **not** testing CRUD. They probe four things:
 
-**[Brute]** "Flat list of deliveries, sum on every `getTotalCost`. O(N) per read — bad for a polled dashboard.
+1. **Data modeling** — immutability, separation of concerns
+2. **Scalability thinking** — read/write asymmetry, hot paths
+3. **Complexity analysis** — O(1) reads, defending optimality
+4. **Future extensibility** — designing so requirement expansions slot in cleanly
 
-**[Optimal]** Two ideas:
-1. **Running totals** updated on each write → reads become O(1).
-2. **Min-heap on `end_time`** for unpaid deliveries → `payUpTo` peeks the smallest end_time and pops while in window. Each delivery paid once across lifetime → amortized cheap.
+Common probes you should be ready for:
+- *"What happens with millions of deliveries?"*
+- *"What if `get_total_cost` is called thousands of times per second?"*
 
-**[Complexity]** addDriver O(1), recordDelivery O(log N), getTotalCost O(1), getTotalCostUnpaid O(1), payUpTo O(K log N) amortized.
+## Conversation Script (Turn-by-Turn)
 
-**[Subtle]** Heap needs a tie-breaker integer between `end_time` and `Delivery` to prevent `Delivery < Delivery` crashes. Use `Decimal(str(float))` not `Decimal(float)` to avoid binary noise.
+### Phase 1: Three Initial APIs
+
+**Interviewer:** "Design a delivery cost tracking system. Three APIs: `add_driver(driverId)`, `add_delivery(driverId, startTime, endTime)`, and `get_total_cost()`."
+
+**You — clarifying questions:**
+
+> "Before I design, a few clarifying questions:
+> 1. **Cost calculation** — flat rate, hourly, distance-based?
+> 2. **Read vs write ratio** — is `get_total_cost` queried frequently, like a dashboard?
+> 3. **Scale** — thousands of deliveries a day, millions over time?
+> 4. **Currency / precision** — assuming USD with cents-level precision since financial accuracy matters.
+> 5. **Time format** — Unix epoch, UTC datetime?
+> 6. **Are inputs trusted, or do I need to validate?**"
+
+**Interviewer:** "Hourly rate × duration. `get_total_cost` runs thousands of times per second — it powers a live dashboard. Millions of deliveries over time. USD. Inputs valid."
+
+**You — design:**
+
+> "Two key observations:
+>
+> 1. **`get_total_cost` is overwhelmingly the hot path** — thousands of QPS, while `add_delivery` is much rarer. I should shift computation to write time so reads stay cheap.
+>
+> 2. **Financial data benefits from immutability.** Deliveries should be append-only — once recorded, never modified — for audit trails, dispute resolution, and historical reporting.
+>
+> Data model:
+> ```
+> Driver:   { id, hourly_rate }
+> Delivery: { driver_id, start_time, end_time, cost }   # immutable
+> ```
+>
+> Storage:
+> - `drivers: Dict[driver_id → Driver]`
+> - `deliveries: List[Delivery]` — append-only history
+> - `total_cost: Decimal` — running aggregate
+>
+> The naive approach is to compute total cost on every read by iterating all deliveries — O(N) per call. With thousands of QPS and millions of records, that's a non-starter.
+>
+> **I'll maintain a running total updated at write time:**
+>
+> ```python
+> def add_delivery(driver_id, start, end):
+>     cost = drivers[driver_id].hourly_rate * duration_hours(start, end)
+>     deliveries.append(Delivery(driver_id, start, end, cost))
+>     total_cost += cost                                  # O(1)
+>
+> def get_total_cost():
+>     return total_cost                                   # O(1)
+> ```
+>
+> Both `add_delivery` and `get_total_cost` are now O(1). Classic read-write trade-off — when reads dominate, do extra work during writes.
+>
+> Notes on data types:
+> - **`Decimal`, not `float`** — float drift compounds across millions of operations.
+> - **Lock the rate at delivery time** — store `cost` directly on the `Delivery` so historical records reflect the rate that was in effect when the work was done.
+> - **UTC datetime** for timestamps — timezone-safe."
+
+**Probe — "Why store the deliveries list if you're maintaining a running total?"**
+
+> "Two reasons:
+> 1. **Future analytics** — questions like 'cost by driver' or 'cost in a time window' need history. Append is O(1) — cheap to maintain.
+> 2. **Audit and dispute resolution** — if a delivery is contested, we need the record. Throwing away data closes off recovery options.
+>
+> In production this list lives in a database — the in-memory list is just a placeholder."
+
+**Probe — "What if the running total drifts due to a bug?"**
+
+> "Aggregates can drift from truth — silent data corruption is the worst kind. Two safeguards:
+> 1. **Reconciliation job** — periodically recompute `total_cost` from the source list and alert on mismatch.
+> 2. **Source-of-truth treatment** — the deliveries list is canonical. The aggregate is a *cache*. If we ever doubt it, recompute.
+>
+> Standard pattern: append-only event log + materialized aggregate."
+
+### Phase 2: Payment Tracking
+
+**Interviewer:** "Now add `pay_up_to_time(timestamp)` — marks all deliveries ending at or before this time as paid. And `get_cost_to_be_paid()` returns the unpaid total."
+
+**You — clarifying first:**
+
+> "How often is `pay_up_to_time` called? Real-time settlement, or batch payroll?"
+
+**Interviewer:** "Batch — typically once a day or once a week."
+
+**You — design:**
+
+> "Confirms reads stay the hot path. `pay_up_to_time` is rare, so I can afford O(N) work there.
+>
+> Key principle: **don't mutate delivery records when payment happens.** Two reasons:
+> 1. **Auditability** — disputes need the original record intact.
+> 2. **Separation of concerns** — delivery creation and payment are independent operations.
+>
+> Instead of marking each delivery as paid, **track payments as a moving boundary on the timeline**:
+>
+> ```
+> total_cost: Decimal           # all deliveries, lifetime
+> total_paid: Decimal           # cumulative paid amount
+> last_paid_time: datetime      # the moving boundary
+> ```
+>
+> ```python
+> def pay_up_to_time(t):
+>     for d in deliveries:
+>         if last_paid_time < d.end_time <= t:
+>             total_paid += d.cost
+>     last_paid_time = t
+>
+> def get_cost_to_be_paid():
+>     return total_cost - total_paid                     # O(1)
+> ```
+>
+> `get_cost_to_be_paid` stays O(1) — same hot-path optimization. `pay_up_to_time` is O(N) worst case, acceptable because:
+> - It runs rarely (batch).
+> - Each delivery is processed at most once across all `pay_up_to_time` calls — amortized O(1) per delivery.
+> - Production: index by `end_time` for O(K log N), where K = newly paid items.
+>
+> **Crucially, delivery records are never mutated.** All historical data is preserved. The boundary is the only mutable state, and it only moves forward."
+
+**Probe — "What if I need to know exactly which deliveries were paid in a specific batch?"**
+
+> "Boundary loses that granularity. Two options:
+> 1. **`payment_batches: List[(start_time, end_time, amount)]` log.** Each `pay_up_to_time` call appends an entry. Audit reconstruction is a list scan.
+> 2. **Add a `paid_at` timestamp on each delivery.** One-time mutation, only metadata — original cost/times stay frozen.
+>
+> For most logistics systems I'd go with option 1 — keep deliveries fully immutable, track payments in a separate log."
+
+**Probe — "Overlapping `pay_up_to_time` calls?"**
+
+> "The boundary handles it naturally — we only count `last_paid_time < d.end_time <= t`. If someone calls `pay_up_to_time(t1)` then `pay_up_to_time(t2)` with `t2 < t1`, treat the second call as a no-op — the boundary already moved past `t2`. Document this idempotency clearly: calling with an earlier time should never roll back the boundary, because that would mean reverting payments."
+
+**Optional follow-up — when the heap becomes the right answer:**
+
+> "If `pay_up_to_time` becomes a hot path — say, real-time settlement — I'd switch to a min-heap of unpaid deliveries keyed on `end_time`. `pay_up_to_time` becomes O(K log N) amortized at the cost of O(log N) per `add_delivery`. For batch payroll, the running-totals approach wins because writes stay O(1) and history is fully preserved."
+
+### Phase 3: Driver Analytics
+
+**Interviewer:** "Add `get_max_active_drivers_in_last_24_hours(current_time)` — max drivers simultaneously active during any moment in the last 24 hours."
+
+**You — recognize the shift:**
+
+> "This is qualitatively different — **time-windowed analytics**, not transactional aggregation. The challenge is repeatedly answering the same question over shifting windows. Naive O(N) scans don't scale.
+>
+> Naive: filter deliveries overlapping the 24h window, run sweep-line, return peak. O(N log N) per query.
+>
+> Several scaling strategies:
+>
+> ### Option 1: Sliding-window cache + sweep-line
+>
+> Cache deliveries that intersect the 24h window in a sorted structure. As time advances, evict deliveries that fall outside.
+>
+> O(W log W) per query where W = window size. W << N.
+>
+> ### Option 2: Bucketed counts (best fit here)
+>
+> Divide timeline into fixed buckets (per-minute). For each bucket, track which drivers were active.
+>
+> ```python
+> buckets: Dict[minute_index → Set[driver_id]]
+>
+> def add_delivery(driver_id, start, end):
+>     for m in range(minute_of(start), minute_of(end) + 1):
+>         buckets[m].add(driver_id)
+>
+> def get_max_active_drivers_in_last_24_hours(current_time):
+>     end_min = minute_of(current_time)
+>     start_min = end_min - 1440
+>     return max(len(buckets[m]) for m in range(start_min, end_min + 1))
+> ```
+>
+> Query is **O(1440)** — independent of N. Add is bounded by delivery duration. Memory: O(active driver-minutes).
+>
+> ### Option 3: Event stream + windowed aggregation (production)
+>
+> Push delivery events to Kafka, stream-process via Flink or Spark Structured Streaming, materialize windowed aggregates. Overkill for in-memory but correct architecture at scale.
+>
+> ### My pick: Option 2
+>
+> Bucketed counts give O(window) per query, O(work-done) memory, and generalize to any window size by changing bucket granularity."
+
+**Probe — "Memory if buckets stay forever?"**
+
+> "Two answers:
+> 1. **Eviction.** Buckets older than 24h are no longer queryable — background job (or lazy on query) deletes them. Memory bounded by O(window × avg_active_drivers).
+> 2. **Persistence.** For longer history, persist to a time-series database (InfluxDB, TimescaleDB, or Postgres with bucket indexing). In-memory cache for hot data, TSDB for older queries."
+
+**Probe — "What if the question changes to 'last 7 days' or 'last hour'?"**
+
+> "Bucket granularity determines query resolution. For 'last hour' use minute buckets. For 'last 7 days' use hour buckets to keep bucket count manageable. Or maintain a hierarchy of bucket sizes — minute, hour, day — like a roll-up cube. That's the materialized-view pattern in OLAP."
+
+### Closing Meta-Probes
+
+**Probe — "How would you scale to millions of deliveries per day?"**
+
+> "Three layers:
+> 1. **Persistence** — Postgres source-of-truth with `end_time` index for `pay_up_to_time`. Running totals materialized as a separate table or in Redis with `INCRBYFLOAT`.
+> 2. **Hot-path caching** — `get_total_cost` and `get_cost_to_be_paid` from Redis with sub-ms latency, atomic on each write.
+> 3. **Analytics** — bucketed counts in Redis (sorted sets) for short windows, time-series database for longer. Stream processing if real-time aggregation needed.
+>
+> Core invariant — immutable deliveries + materialized aggregates — stays the same. Only the storage tier changes."
+
+**Probe — "Biggest risk in this design?"**
+
+> "Aggregate drift. If `total_cost` and the deliveries list disagree, all reports are silently wrong. Mitigations:
+> 1. **Reconciliation job** — periodic check, alert on drift.
+> 2. **Idempotent writes** — unique delivery ID, duplicates are no-ops on retries.
+> 3. **Source-of-truth treatment** — deliveries list is canonical, aggregates can always be recomputed."
+
+**Probe — "If you had more time, what would you add?"**
+
+> "Three things:
+> 1. **Per-driver aggregates** — same pattern indexed by driver_id. Enables driver-level reporting.
+> 2. **Idempotency keys** — guard against duplicate deliveries on network retries.
+> 3. **Versioning of hourly rates** — currently locked at delivery time, but for retroactive corrections we may want a `rate_history` per driver."
 
 ## Code
 
 ```python
+"""
+Delivery Cost Tracking System.
+Standard library only.
+
+Design principles:
+  - Reads dominate writes -> shift computation to write time
+  - Deliveries are immutable -> never mutate, only append
+  - Payment tracked as a moving boundary, not by mutating records
+  - Bucketed counts for time-windowed analytics
+"""
+
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from heapq import heappush, heappop
+from collections import defaultdict
 
 
 class Driver:
+    """Driver record. hourly_rate as Decimal for financial precision."""
+
     def __init__(self, driver_id, hourly_rate):
         self.id = driver_id
         self.hourly_rate = hourly_rate
 
 
 class Delivery:
+    """
+    Immutable delivery record. Cost is precomputed at construction so:
+      - Reads stay O(1)
+      - Rate is locked in at delivery time (correct payroll behavior
+        if rates change later)
+    """
+
     def __init__(self, driver_id, start_time, end_time, cost):
         self.driver_id = driver_id
         self.start_time = start_time
@@ -88,69 +321,239 @@ class Delivery:
 
 
 class DeliverySystem:
+    """
+    Core design:
+      - Immutable deliveries list (append-only)
+      - Running total_cost (O(1) reads)
+      - Payment as moving boundary: total_paid + last_paid_time
+      - Bucketed minute-counts for 24h window analytics
+
+    All hot-path operations are O(1).
+    pay_up_to_time is O(N) worst case but called rarely (batch payroll).
+    """
+
+    BUCKET_SIZE_SECONDS = 60  # one-minute buckets
+    WINDOW_BUCKETS = 1440     # 24h = 1440 minutes
+
     def __init__(self):
         self._drivers = {}
+        # Immutable history -- never mutated, only appended.
+        self._deliveries = []
+        # Running aggregates -- updated on every write.
         self._total_cost = Decimal("0")
-        self._total_unpaid = Decimal("0")
-        # Heap entries: (end_time, tie_breaker, Delivery).
-        # Tie-breaker prevents heapq from comparing Delivery objects on
-        # equal end_times (which would crash).
-        self._unpaid = []
-        self._tie_breaker = 0
+        self._total_paid = Decimal("0")
+        # Payment boundary -- only moves forward.
+        self._last_paid_time = None
+        # Bucketed counts for active-driver analytics.
+        # bucket_index -> set of driver_ids active during that minute.
+        self._buckets = defaultdict(set)
+
+    # -----------------------------------------------------------------
+    # Phase 1: core CRUD with running totals
+    # -----------------------------------------------------------------
 
     def add_driver(self, driver_id, usd_hourly_rate):
+        # Decimal(str(float)) avoids float binary noise -- 0.1 stays 0.1.
         rate = Decimal(str(usd_hourly_rate))
         self._drivers[driver_id] = Driver(driver_id, rate)
 
-    def record_delivery(self, driver_id, start_time, end_time):
+    def add_delivery(self, driver_id, start_time, end_time):
+        """
+        Record a delivery. O(1) amortized for the cost/total updates,
+        O(duration_minutes) for bucket population (bounded by max
+        delivery length, typically constant).
+        """
         driver = self._drivers[driver_id]
         duration_seconds = (end_time - start_time).total_seconds()
         hours = Decimal(str(duration_seconds)) / Decimal("3600")
         cost = driver.hourly_rate * hours
 
         delivery = Delivery(driver_id, start_time, end_time, cost)
+        self._deliveries.append(delivery)
         self._total_cost += cost
-        self._total_unpaid += cost
 
-        heappush(self._unpaid, (end_time, self._tie_breaker, delivery))
-        self._tie_breaker += 1
+        # Populate buckets so the 24h-window query is O(window).
+        start_bucket = self._bucket_index(start_time)
+        end_bucket = self._bucket_index(end_time)
+        for b in range(start_bucket, end_bucket + 1):
+            self._buckets[b].add(driver_id)
 
     def get_total_cost(self):
+        """O(1) -- the hot path. Just return the running aggregate."""
         return self._total_cost
 
-    def pay_up_to(self, pay_time):
-        while self._unpaid and self._unpaid[0][0] <= pay_time:
-            _, _, delivery = heappop(self._unpaid)
-            self._total_unpaid -= delivery.cost
+    # -----------------------------------------------------------------
+    # Phase 2: payment tracking via moving boundary
+    # -----------------------------------------------------------------
 
-    def get_total_cost_unpaid(self):
-        return self._total_unpaid
+    def pay_up_to_time(self, timestamp):
+        """
+        Mark deliveries ending at or before timestamp as paid.
 
+        O(N) worst case -- acceptable since batch payroll runs rarely.
+        Each delivery is processed AT MOST ONCE across all pay_up_to_time
+        calls (the boundary only moves forward), so amortized O(1) per
+        delivery across the system's lifetime.
+
+        Idempotent against earlier timestamps -- if t < last_paid_time,
+        no-op (we never roll back the boundary).
+        """
+        if self._last_paid_time is not None and timestamp <= self._last_paid_time:
+            return  # idempotent: don't roll back
+
+        for d in self._deliveries:
+            within_window = (
+                (self._last_paid_time is None
+                 or d.end_time > self._last_paid_time)
+                and d.end_time <= timestamp
+            )
+            if within_window:
+                self._total_paid += d.cost
+        self._last_paid_time = timestamp
+
+    def get_cost_to_be_paid(self):
+        """O(1) -- another hot path."""
+        return self._total_cost - self._total_paid
+
+    # -----------------------------------------------------------------
+    # Phase 3: time-windowed analytics
+    # -----------------------------------------------------------------
+
+    def get_max_active_drivers_in_last_24_hours(self, current_time):
+        """
+        Max distinct drivers active during any single minute in the
+        last 24 hours.
+
+        O(WINDOW_BUCKETS) = O(1440) -- bounded, INDEPENDENT of N.
+
+        Bucket granularity (1 minute) controls resolution. For different
+        window sizes, change WINDOW_BUCKETS or use a coarser bucket size.
+        """
+        end_bucket = self._bucket_index(current_time)
+        start_bucket = end_bucket - self.WINDOW_BUCKETS + 1
+
+        max_active = 0
+        for b in range(start_bucket, end_bucket + 1):
+            count = len(self._buckets.get(b, ()))
+            if count > max_active:
+                max_active = count
+        return max_active
+
+    # -----------------------------------------------------------------
+    # Internal helpers
+    # -----------------------------------------------------------------
+
+    def _bucket_index(self, ts):
+        """Convert a datetime to its bucket index (minutes since epoch)."""
+        return int(ts.timestamp()) // self.BUCKET_SIZE_SECONDS
+
+
+# ---------------------------------------------------------------------
+# Demo
+# ---------------------------------------------------------------------
 
 def demo():
     system = DeliverySystem()
     system.add_driver(1, 10.00)
+    system.add_driver(2, 15.00)
 
-    base = datetime(2026, 5, 30, 9, 0, tzinfo=timezone.utc)
-    system.record_delivery(1, base, base + timedelta(hours=1, minutes=30))  # $15
-    system.record_delivery(1, base + timedelta(minutes=30),
-                              base + timedelta(hours=2, minutes=30))         # $20
+    base = datetime(2026, 6, 7, 9, 0, tzinfo=timezone.utc)
 
-    print("Total cost:", system.get_total_cost())              # 35.00
-    print("Unpaid:", system.get_total_cost_unpaid())           # 35.00
+    # Driver 1: 1.5h delivery -> $15.00
+    system.add_delivery(1, base, base + timedelta(hours=1, minutes=30))
+    # Driver 1: 2h delivery overlapping -> $20.00
+    system.add_delivery(1, base + timedelta(minutes=30),
+                           base + timedelta(hours=2, minutes=30))
+    # Driver 2: 1h delivery overlapping both -> $15.00
+    system.add_delivery(2, base + timedelta(hours=1),
+                           base + timedelta(hours=2))
 
-    system.pay_up_to(base + timedelta(hours=2))                # pays first
-    print("After payUpTo(+2h) unpaid:", system.get_total_cost_unpaid())  # 20.00
+    print("=== Phase 1 ===")
+    print("Total cost:", system.get_total_cost())              # 50.00
+    print("Cost to be paid:", system.get_cost_to_be_paid())    # 50.00
+
+    print("\n=== Phase 2 ===")
+    # Pay everything ending at or before +2h: covers delivery 1 ($15)
+    # and delivery 3 ($15). Delivery 2 (ends at +2.5h) remains unpaid.
+    system.pay_up_to_time(base + timedelta(hours=2))
+    print("After pay_up_to_time(+2h):")
+    print("  Total cost:", system.get_total_cost())            # 50.00 (unchanged)
+    print("  Cost to be paid:", system.get_cost_to_be_paid())  # 20.00
+
+    # Idempotent: paying with an earlier time is a no-op.
+    system.pay_up_to_time(base + timedelta(hours=1))
+    print("  After idempotent earlier call, to be paid:",
+          system.get_cost_to_be_paid())                        # 20.00
+
+    print("\n=== Phase 3 ===")
+    # During [+1h, +1.5h]: drivers 1 (both deliveries) and 2 -> 2 unique.
+    # Per-minute peak in last 24h: 2 distinct drivers.
+    current = base + timedelta(hours=3)
+    max_active = system.get_max_active_drivers_in_last_24_hours(current)
+    print("Max active drivers in last 24h:", max_active)       # 2
 
 
 if __name__ == "__main__":
     demo()
 ```
 
-## Two Sentences to Memorize
+## Final Complexity
 
-1. *"The dashboard is the hot path — I'll optimize reads with running totals so `getTotalCost` is O(1), and use a min-heap keyed on end_time for `payUpTo` so each delivery is paid exactly once across the system's lifetime."*
-2. *"Three of five operations are O(1) — at the theoretical floor — and the other two match the comparison-based lower bound for ordered insertion and minimum extraction, so this design is provably optimal."*
+| Operation | Complexity | Notes |
+|---|---|---|
+| `add_driver` | O(1) | dict insert |
+| `add_delivery` | O(1) amortized | + O(duration_minutes) for bucket fill (bounded) |
+| `get_total_cost` | **O(1)** | hot path — running total |
+| `pay_up_to_time` | O(N) worst case | amortized O(1) per delivery; batch operation |
+| `get_cost_to_be_paid` | **O(1)** | hot path — derived from running totals |
+| `get_max_active_drivers_in_last_24_hours` | **O(1440)** | independent of N — bucket scan |
+
+## Why This Beats the Heap Variant for This Interview
+
+| Concern | Running totals | Heap-based |
+|---|---|---|
+| `add_delivery` | **O(1)** | O(log N) |
+| `get_total_cost` | O(1) | O(1) |
+| `get_cost_to_be_paid` | O(1) | O(1) |
+| `pay_up_to_time` (batch) | O(N), rare | O(K log N), rare |
+| History preservation | ✅ Full | ❌ Loses paid items |
+| Code complexity | Single source of truth | Heap + tie-breaker + sentinel |
+| Bug surface | Tiny | Larger |
+
+For the interview as framed (batch payroll, audit history required, hot reads), **running totals wins on 5 of 6 dimensions**. The heap is the right answer for *real-time settlement*, where `pay_up_to_time` is frequent — that's the upgrade path to mention.
+
+## Three Sentences to Memorize
+
+These map directly to the three phases — drop them at the right moments:
+
+1. **Phase 1:** *"Reads dominate writes for this dashboard, so I'll shift computation to write time — maintain a running total updated on each delivery, making `get_total_cost` O(1). Deliveries are immutable; aggregates are derived state."*
+
+2. **Phase 2:** *"Payment is a separate concern from delivery. I'll never mutate a delivery record when payment happens — instead I track a moving boundary on the timeline and a separate `total_paid` aggregate. Historical delivery data stays intact for audit and dispute resolution."*
+
+3. **Phase 3:** *"For windowed analytics over millions of records, I avoid full scans by maintaining intermediate state. Bucketed counts give O(window_size) per query independent of N — generalize to any window granularity by choosing the bucket size."*
+
+## Likely Cross-Questions
+
+| Question | Answer |
+|---|---|
+| "What if `pay_up_to_time` becomes hot?" | Switch to min-heap of unpaid deliveries keyed on `end_time`; trades O(log N) write for O(K log N) payment |
+| "What if running total drifts?" | Reconciliation job; deliveries list is canonical, aggregates are cache |
+| "Concurrent writers?" | Single lock on aggregates, or atomic `INCRBYFLOAT` in Redis at scale |
+| "How to detect duplicate deliveries on retries?" | Idempotency key (delivery_id); duplicate `add_delivery` is no-op |
+| "Per-driver totals?" | Same pattern keyed by driver_id; `Dict[driver_id → Decimal]` running total |
+| "Cost in a custom time range?" | Need indexed-by-time storage; segment tree or DB query |
+| "Refund / cancel a delivery?" | Append-only is incompatible with deletes; store cancellation as a separate negative-amount event |
+| "Memory of bucket counts?" | Evict buckets older than max query window; or persist to TSDB |
+
+## What This Interview Actually Tests
+
+| Tested skill | Where you give it |
+|---|---|
+| Data modeling | Immutable Delivery, separation of payment from delivery |
+| Scalability thinking | Running totals, bucketed analytics, eviction strategies |
+| Complexity analysis | O(1) reads, O(window) analytics, defended optimality |
+| Future extensibility | Phase 2 and 3 slot in cleanly because Phase 1 was designed for it |
+| Production awareness | Reconciliation, idempotency, persistence — only when probed |
 
 ---
 
