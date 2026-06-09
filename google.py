@@ -9075,3 +9075,85 @@ def max_product(arr, k):
 a= [-5, 6, 2, -2, 4, -1, 7]
 k = 3
 print(max_product(a, k))
+
+
+
+
+
+# consequtive occurance of number k in the array.
+
+from collections import defaultdict
+  
+
+def max_consecutive(arr, k):
+      """Part 1: max consecutive run of k. O(N) time, O(1) space."""
+      best = current = 0
+      for x in arr:
+          if x == k:
+              current += 1
+              best = max(best, current)
+          else:
+              current = 0
+      return best
+  
+
+def max_consecutive_per_value(arr, queries):
+      """Part 2: for each query value, max consecutive run.
+      Single pass over arr. O(N + Q) time, O(distinct values) space."""
+      max_run = defaultdict(int)
+      current_val = None
+      current_run = 0
+      for x in arr:
+          if x == current_val:
+              current_run += 1
+          else:
+              current_val, current_run = x, 1
+          max_run[x] = max(max_run[x], current_run)
+      return [max_run.get(q, 0) for q in queries]
+
+
+def max_consecutive_with_modifications(arr, k, c):
+      """Part 3: longest run after up to c modifications.
+      Sliding window: longest subarray with at most c non-k elements.
+      O(N) time, O(1) space."""
+      left = 0
+      non_k = 0
+      best = 0
+      for right, val in enumerate(arr):
+          if val != k:
+              non_k += 1
+          while non_k > c:
+              if arr[left] != k:
+                  non_k -= 1
+              left += 1
+          best = max(best, right - left + 1)
+      return best
+
+
+  # ---------------------------------------------------------------------
+  # Tests
+  # ---------------------------------------------------------------------
+
+def test():
+      # Part 1
+      assert max_consecutive([6, 2, 3, 6, 6, 5, 3, 6, 6, 6, 7, 8], 6) == 3
+      assert max_consecutive([1, 2, 3], 5) == 0
+      assert max_consecutive([], 1) == 0
+
+      # Part 2
+      assert max_consecutive_per_value(
+          [6, 2, 3, 6, 6, 3, 3, 6, 6, 6, 6, 8], [6, 3]
+      ) == [4, 2]
+
+      # Part 3
+      assert max_consecutive_with_modifications(
+          [6, 2, 3, 6, 6, 6, 3, 6, 6, 6, 6, 8], 6, 2
+      ) == 9   # NOT 8
+      assert max_consecutive_with_modifications([0, 0, 0, 0], 1, 2) == 2
+      assert max_consecutive_with_modifications([1, 1, 1], 1, 0) == 3
+      assert max_consecutive_with_modifications([], 1, 5) == 0
+
+      print("All passed.")
+
+  
+test()
