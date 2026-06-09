@@ -8531,3 +8531,229 @@ def count_triplets(A: List[int], B: List[int], C: List[int], d: int) -> int:
             ans += cntA * cntB
 
     return ans
+
+
+square detect 
+
+Step 4: Code
+
+  """
+  Streaming Square Detector (axis-aligned only).
+
+  API:
+    detector = SquareDetector()
+    detector.add(x, y) -> bool   # True iff this point completed a square
+
+  Approach: maintain a set of seen points. On each add, iterate over
+  existing points to find a diagonal partner; check if the other two
+  corners are also in the set.
+
+  Time:  O(N) per add, where N = points seen so far
+  Space: O(N)
+  """
+
+
+  class SquareDetector:
+      def __init__(self):
+          self._seen = set()                 # set of (x, y) tuples
+          # Optional optimization: group by column for faster lookups.
+          self._by_x = {}                    # x -> set of y values
+
+      def add(self, x, y):
+          """
+          Add a new point. Returns True iff this point + 3 previously
+          seen points form an axis-aligned square.
+
+          We treat the new point as one corner of a square and look for
+          the diagonal partner among already-seen points. Then check the
+          other two corners.
+          """
+          new = (x, y)
+
+          # If we've seen it before, it's a no-op for square detection
+          # (since the same point can't double-count corners).
+          if new in self._seen:
+              return False
+
+          formed = False
+
+          # Iterate over points sharing the same x-coordinate (column).
+          # For each y' in this column, the new point and (x, y') form a
+          # vertical edge. The square's other two corners are at column
+          # x+d or x-d, at y and y'.
+          if x in self._by_x:
+              for y_prime in self._by_x[x]:
+                  if y_prime == y:
+                      continue
+                  d = abs(y - y_prime)
+                  # Try square to the right (column x+d) and left (x-d).
+                  for dx in (d, -d):
+                      other_x = x + dx
+                      if (other_x, y) in self._seen and (other_x, y_prime) in self._seen:
+                          formed = True
+                          break
+                  if formed:
+                      break
+  
+          # Insert the new point.
+          self._seen.add(new)
+          self._by_x.setdefault(x, set()).add(y)
+
+          return formed
+
+
+  # ---------------------------------------------------------------------
+  # Demo
+  # ---------------------------------------------------------------------
+
+  def demo():
+      # Example from problem
+      detector = SquareDetector()
+      points = [(1, 2), (3, 4), (4, 2), (1, 5), (4, 5)]
+      expected = [False, False, False, False, True]
+
+      print("Example 1:")
+      for (x, y), exp in zip(points, expected):
+          result = detector.add(x, y)
+          status = "✓" if result == exp else "✗"
+          print(f"  add({x}, {y}) -> {result} (expected {exp}) {status}")
+      # The last point (4, 5) completes a square with (1, 5), (1, 2), (4, 2).
+      # Verify: corners (1,2), (4,2), (1,5), (4,5). Sides: 3 and 3. Square! ✓
+
+      # Test: square detected on first valid completion
+      print("\nExample 2 (rectangle, not square):")
+      detector = SquareDetector()
+      rect = [(0, 0), (2, 0), (0, 1), (2, 1)]
+      for (x, y) in rect:
+          print(f"  add({x}, {y}) -> {detector.add(x, y)}")
+      # All False -- rectangle 2x1 is not a square.
+
+      # Test: actual square 2x2
+      print("\nExample 3 (2x2 square):")
+      detector = SquareDetector()
+      sq = [(0, 0), (2, 0), (0, 2), (2, 2)]
+      for (x, y) in sq:
+          print(f"  add({x}, {y}) -> {detector.add(x, y)}")
+      # Last point completes the square.
+
+      # Test: multiple potential squares
+      print("\nExample 4 (multiple potential squares):")
+      detector = SquareDetector()
+      points = [(0, 0), (1, 0), (0, 1), (1, 1),    # unit square completed at last point
+                (5, 5), (6, 5), (5, 6), (6, 6)]    # another unit square
+      for (x, y) in points:
+          print(f"  add({x}, {y}) -> {detector.add(x, y)}")
+
+      # Test: duplicate point
+      print("\nExample 5 (duplicate point):")
+      detector = SquareDetector()
+      print(f"  add(0, 0) -> {detector.add(0, 0)}")  # False
+      print(f"  add(0, 0) -> {detector.add(0, 0)}")  # False (no-op)
+
+      # Test: empty / single / two points
+      print("\nExample 6 (insufficient points):")
+      detector = SquareDetector()
+      for (x, y) in [(0, 0), (1, 0), (0, 1)]:
+          print(f"  add({x}, {y}) -> {detector.add(x, y)}")
+      # All False -- 3 points can't form a square.
+
+
+  if __name__ == "__main__":
+      demo()
+  
+
+#rectangle divide
+
+
+
+  def find_vertical_line_sum(rectangles):
+      """
+      Find x such that sum of left-portions of all rectangles = sum of
+      right-portions. Overlapping regions ARE counted multiple times
+      (each rectangle independently).
+
+      Time:  O(N log X) where X = max x-coordinate
+      Space: O(1)
+      """
+      if not rectangles:
+          return None
+
+      min_x = min(r[0] for r in rectangles)
+      max_x = max(r[2] for r in rectangles)
+
+      # Total weighted area (sum over rectangles, with overlap multiplicity).
+      total = sum((x2 - x1) * (y2 - y1) for x1, y1, x2, y2 in rectangles)
+      target_left = total / 2
+
+      # Binary search on the line x.
+      # Note: for integer x, we may not hit exactly target_left; we converge
+      # to the boundary point where left_area transitions across half.
+      lo, hi = min_x, max_x
+
+      # Use float for precision; binary search to within epsilon.
+      eps = 1e-9
+      while hi - lo > eps:
+          mid = (lo + hi) / 2
+          left_area = _compute_left_area(rectangles, mid)
+          if left_area < target_left:
+              lo = mid
+          else:
+              hi = mid
+
+      return (lo + hi) / 2
+
+
+  def _compute_left_area(rectangles, x):
+      """
+      Sum of left-of-x portions of all rectangles.
+      O(N), three cases per rectangle.
+      """
+      total = 0.0
+      for x1, y1, x2, y2 in rectangles:
+          height = y2 - y1
+          if x >= x2:
+              # Line is right of rectangle -> entire rectangle is on left.
+              total += (x2 - x1) * height
+          elif x <= x1:
+              # Line is left of rectangle -> nothing on left.
+              pass
+          else:
+              # Line cuts the rectangle.
+              total += (x - x1) * height
+      return total
+
+  
+  # ---------------------------------------------------------------------
+  # Demo
+  # ---------------------------------------------------------------------
+
+  def demo():
+      # Two non-overlapping unit squares
+      rectangles = [
+          [0, 0, 2, 2],   # 2x2 area = 4
+          [4, 0, 6, 2],   # 2x2 area = 4
+      ]
+      line = find_vertical_line_sum(rectangles)
+      print(f"Two squares: line at x = {line:.4f}")  # 3.0
+
+      # Article example: line at boundary
+      rectangles = [
+          [0, 0, 2, 2],
+          [2, 0, 4, 2],   # adjacent, no overlap
+      ]
+      line = find_vertical_line_sum(rectangles)
+      print(f"Adjacent: line at x = {line:.4f}")  # 2.0
+
+      # Overlapping rectangles
+      rectangles = [
+          [0, 0, 4, 2],
+          [2, 0, 6, 2],   # overlap [2,0,4,2]
+      ]
+      # Sum-of-areas: 8 + 8 = 16. Target left = 8.
+      # At x=3: left = 3*2 + 1*2 = 8. ✓
+      line = find_vertical_line_sum(rectangles)
+      print(f"Overlapping: line at x = {line:.4f}")  # 3.0
+
+
+  if __name__ == "__main__":
+      demo()
