@@ -8954,3 +8954,62 @@ Step 4: Code
 
   if __name__ == "__main__":
       demo()
+
+
+
+# bad pair string
+  def remove_bad_pairs(s):
+      """
+      Returns the string after all bad pairs are recursively removed.
+      """
+      stack = []
+      for ch in s:
+          if stack and _is_bad_pair(stack[-1], ch):
+              stack.pop()
+          else:
+              stack.append(ch)
+      return ''.join(stack)
+
+
+  def _is_bad_pair(a, b):
+      """
+      True iff a and b are the same letter in different cases.
+      'aA', 'Bb' -> True.
+      'aa', 'AA', 'ab' -> False.
+      """
+      # Both must be alphabetic.
+      if not (a.isalpha() and b.isalpha()):
+          return False
+      # Same letter, different case.
+      return a != b and a.lower() == b.lower()
+
+  def remove_bad_pairs_two_pointer(s):
+      """
+      Two-pointer in-place approach.
+
+      write: index where the next kept char goes (also = current 'stack size')
+      read:  index of the char being examined
+
+      O(N) time, O(N) space (Python strings are immutable, so we use a list).
+      For mutable strings (C++, Java char[]), this would be O(1) extra space.
+      """
+      if not s:
+          return ""
+
+      buf = list(s)        # mutable copy
+      write = 0
+
+      for read in range(len(buf)):
+          ch = buf[read]
+          # Check if it cancels with the most recent kept char.
+          if write > 0 and _is_bad_pair(buf[write - 1], ch):
+              write -= 1   # pop the top
+          else:
+              buf[write] = ch
+              write += 1
+
+      return ''.join(buf[:write])
+
+
+  def _is_bad_pair(a, b):
+      return a != b and a.isalpha() and b.isalpha() and a.lower() == b.lower()
