@@ -8757,3 +8757,200 @@ Step 4: Code
 
   if __name__ == "__main__":
       demo()
+
+
+
+
+# flight reach
+  """
+  Package Routing Through Flights.
+
+  Three variants:
+    1. Reachability (DFS/BFS)
+    2. Minimum number of transfers (BFS)
+    3. Minimum arrival time (Dijkstra)
+
+  Standard library only.
+  """
+
+  from collections import defaultdict, deque
+  from heapq import heappush, heappop
+
+
+  def build_graph(flights):
+      """
+      Build adjacency list from flights.
+      flights: list of (src, dst, dep_time, arr_time)
+      Returns: dict[airport -> list of (dst, dep_time, arr_time)]
+      """
+      graph = defaultdict(list)
+      for src, dst, dep, arr in flights:
+          graph[src].append((dst, dep, arr))
+      return graph
+
+
+  # ---------------------------------------------------------------------
+  # Variant 1: Reachability
+  # ---------------------------------------------------------------------
+
+  def can_reach(origin, destination, flights):
+      """
+      Returns True iff a package starting at origin (time 0) can reach
+      destination via the given flights.
+
+      BFS with state = (airport, earliest_time_we've_been_there).
+      Track best (earliest) arrival per airport to prune.
+
+      Time:  O(F + A)
+      Space: O(F + A)
+      """
+      if origin == destination:
+          return True
+
+      graph = build_graph(flights)
+      # earliest[airport] = the earliest time we've reached airport.
+      # If we reach it later, no point exploring (any subsequent flight
+      # available later was also available earlier).
+      earliest = {origin: 0}
+      queue = deque([(origin, 0)])
+
+      while queue:
+          airport, time = queue.popleft()
+          if airport == destination:
+              return True
+
+          for dst, dep, arr in graph.get(airport, ()):
+              if dep < time:
+                  continue   # missed this flight
+              if dst not in earliest or arr < earliest[dst]:
+                  earliest[dst] = arr
+                  queue.append((dst, arr))
+
+      return False
+  
+
+  # ---------------------------------------------------------------------
+  # Variant 2: Minimum Number of Transfers
+  # ---------------------------------------------------------------------
+
+  def min_transfers(origin, destination, flights):
+      """
+      Returns the minimum number of flights needed to get from origin to
+      destination, or -1 if unreachable.
+
+      BFS layer-by-layer. Each layer = one more flight.
+
+      Time:  O(F + A)
+      Space: O(F + A)
+      """
+      if origin == destination:
+          return 0
+
+      graph = build_graph(flights)
+
+      # State: (airport, current_time). Track best arrival per airport.
+      earliest = {origin: 0}
+      queue = deque([(origin, 0, 0)])  # (airport, time, transfers)
+
+      while queue:
+          airport, time, transfers = queue.popleft()
+          if airport == destination:
+              return transfers
+
+          for dst, dep, arr in graph.get(airport, ()):
+              if dep < time:
+                  continue
+              if dst not in earliest or arr < earliest[dst]:
+                  earliest[dst] = arr
+                  queue.append((dst, arr, transfers + 1))
+
+      return -1
+
+
+  # ---------------------------------------------------------------------
+  # Variant 3: Minimum Arrival Time (Dijkstra)
+  # ---------------------------------------------------------------------
+
+  def min_arrival_time(origin, destination, flights):
+      """
+      Returns the minimum arrival time at destination, or None if unreachable.
+
+      Modified Dijkstra: priority queue keyed by arrival time at each airport.
+      From a state (airport, t), explore flights with dep >= t.
+
+      Time:  O((F + A) log F)
+      Space: O(F + A)
+      """
+      if origin == destination:
+          return 0
+
+      graph = build_graph(flights)
+      earliest = {origin: 0}
+      # heap entries: (arrival_time, airport)
+      heap = [(0, origin)]
+
+      while heap:
+          time, airport = heappop(heap)
+          if airport == destination:
+              return time
+          # Skip stale heap entries.
+          if time > earliest.get(airport, float('inf')):
+              continue
+
+          for dst, dep, arr in graph.get(airport, ()):
+              if dep < time:
+                  continue
+              if arr < earliest.get(dst, float('inf')):
+                  earliest[dst] = arr
+                  heappush(heap, (arr, dst))
+
+      return None
+
+
+  # ---------------------------------------------------------------------
+  # Demo
+  # ---------------------------------------------------------------------
+
+  def demo():
+      # Example 1
+      flights = [
+          ("NYC", "LAX", 0, 4),
+          ("LAX", "SFO", 5, 7),
+      ]
+      print(f"E1 reachable: {can_reach('NYC', 'SFO', flights)}")  # True
+      print(f"E1 transfers: {min_transfers('NYC', 'SFO', flights)}")  # 2
+      print(f"E1 arrival: {min_arrival_time('NYC', 'SFO', flights)}")  # 7
+
+      # Example 2: arrive at LAX at 4, but flight to SFO leaves at 3 (missed)
+      flights = [
+          ("NYC", "LAX", 0, 4),
+          ("LAX", "SFO", 3, 5),
+      ]
+      print(f"\nE2 reachable: {can_reach('NYC', 'SFO', flights)}")  # False
+      print(f"E2 transfers: {min_transfers('NYC', 'SFO', flights)}")  # -1
+      print(f"E2 arrival: {min_arrival_time('NYC', 'SFO', flights)}")  # None
+
+      # Multiple paths, different transfers vs arrival times
+      flights = [
+          # Direct: NYC -> SFO, arrive at 10
+          ("NYC", "SFO", 0, 10),
+          # 2-hop: NYC -> ORD -> SFO, arrive at 6
+          ("NYC", "ORD", 0, 2),
+          ("ORD", "SFO", 3, 6),
+          # 3-hop: NYC -> BOS -> ORD -> SFO, arrive at 5
+          ("NYC", "BOS", 0, 1),
+          ("BOS", "ORD", 1, 2),
+          ("ORD", "SFO", 2, 5),
+      ]
+      print(f"\nMulti-path reachable: {can_reach('NYC', 'SFO', flights)}")  # True
+      print(f"Multi-path min transfers: {min_transfers('NYC', 'SFO', flights)}")  # 1
+      print(f"Multi-path min arrival: {min_arrival_time('NYC', 'SFO', flights)}")  # 5
+
+      # Origin == destination
+      print(f"\nSame airport: {can_reach('NYC', 'NYC', flights)}")  # True
+      print(f"Same airport transfers: {min_transfers('NYC', 'NYC', flights)}")  # 0
+      print(f"Same airport arrival: {min_arrival_time('NYC', 'NYC', flights)}")  # 0
+
+
+  if __name__ == "__main__":
+      demo()
