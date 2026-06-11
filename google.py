@@ -1298,6 +1298,61 @@ if __name__ == "__main__":
 from collections import defaultdict
 import heapq
 
+
+  import heapq
+  from collections import defaultdict
+
+
+  def most_talkative_users_heap(chat_logs, n):
+      """
+      Top-N talkative users using only heappush/heappop.
+      Maintains a min-heap of size N -- kicks out the smallest when a
+      bigger candidate arrives.
+
+      Time:  O(L*M + U log N)
+      Space: O(U + N)
+      """
+      if n <= 0:
+          return []
+  
+      user_word_count = defaultdict(int)
+      for log in chat_logs:
+          if ':' not in log:
+              continue
+          user, message = log.split(':', 1)
+          user_word_count[user.strip()] += len(message.split())
+
+      if not user_word_count:
+          return []
+
+      # Min-heap of (count, user). Smallest count at the top.
+      heap = []
+      for user, count in user_word_count.items():
+          if len(heap) < n:
+              heapq.heappush(heap, (count, user))
+          elif count > heap[0][0]:
+              # Replace smallest: pop, then push.
+              heapq.heappop(heap)
+              heapq.heappush(heap, (count, user))
+
+      # Sort descending for output.
+      result = sorted(heap, key=lambda x: -x[0])
+      return [(user, count) for count, user in result]
+
+
+  # Demo
+  chat_logs = [
+      "Alice: Hey, how's it going?",
+      "Bob: I'm doing well, thanks for asking!",
+      "Charlie: Anyone up for a game tonight?",
+      "Alice: I'm up for it, let's do it!",
+      "Bob: Sure, I'm in too.",
+      "Alice: Great! Let's meet at 7.",
+      "Charlie: See you all then!"
+  ]
+  print(most_talkative_users_heap(chat_logs, 2))
+  # [('Alice', 16), ('Bob', 10)]
+
 def most_talkative_users(chat_logs, N):
     user_word_count = defaultdict(int)
     
