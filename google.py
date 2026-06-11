@@ -802,71 +802,38 @@ print(func([ [2, 3, 1, 4, 3, 5, 6]]))
 
 # Given a tree having nodes with value 0 and 1. write a function to return the number of islands in tree?
 # Binary Tree:
-class TreeNode:
-    def __init__(self, val=0, left=None, right=None):
-        self.val = val
-        self.left = left
-        self.right = right
-
-def count_islands(root):
-    def dfs(node, visited):
-        if not node or node.val == 0 or node in visited:
-            return 0
-        visited.add(node)
-        size = 1  # Current node contributes to the size
-        size += dfs(node.left, visited)
-        size += dfs(node.right, visited)
-        return size
-
-    def dfs_canonical(node):
-        if not node or node.val == 0:
-            return ""
-        left_structure = dfs_canonical(node.left)
-        right_structure = dfs_canonical(node.right)
-        return f"(1{left_structure}{right_structure})"
-
-    visited = set()
-    island_count = 0
-    sizes = set()
-    structures = set()
-
-    def explore_tree(node):
-        nonlocal island_count
-        if not node:
-            return
-        if node.val == 1 and node not in visited:
-            size = dfs(node, visited)
-            sizes.add(size)
-            structure = dfs_canonical(node)
-            structures.add(structure)
-            island_count += 1
-        explore_tree(node.left)
-        explore_tree(node.right)
-
-    explore_tree(root)
-    return island_count, sizes, structures
-
-# Example usage:
-root = TreeNode(0)
-root.left = TreeNode(1)
-root.right = TreeNode(1)
-root.left.left = TreeNode(1)
-root.right.right = TreeNode(1)
-
-root.left.right = TreeNode(1)
-root.right.left = TreeNode(1)
-root.right.left.left = TreeNode(0)
-root.right.left.right = TreeNode(0)
-root.right.right.left = TreeNode(0)
-root.right.right.right = TreeNode(0)
-root.right.right.right.left = TreeNode(0)
-root.right.right.right.left.left = TreeNode(1)
 
 
-island_count, sizes, structures = count_islands(root)
-print("Number of islands:", island_count)
-print("Sizes of islands:", sizes)
-print("Number of non-isomorphic structures:", len(structures))
+  class TreeNode:
+      def __init__(self, val=0, left=None, right=None):
+          self.val = val
+          self.left = left
+          self.right = right
+
+
+  def find_islands(root):
+      """
+      Returns (count, list_of_island_sizes).
+      """
+      islands = []
+
+      def dfs(node):
+          """Measure size of island rooted at node. Returns 0 if not a 1-node."""
+          if node is None or node.val == 0:
+              return 0
+          return 1 + dfs(node.left) + dfs(node.right)
+
+      def traverse(node, parent_val):
+          """Walk the tree; on finding a new island start, measure it."""
+          if node is None:
+              return
+          if node.val == 1 and parent_val == 0:
+              islands.append(dfs(node))
+          traverse(node.left, node.val)
+          traverse(node.right, node.val)
+
+      traverse(root, 0)
+      return len(islands), islands
 
 
 # O(N)
