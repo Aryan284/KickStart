@@ -978,6 +978,83 @@ def main():
     
 main()
 
+
+
+# Precompute Dijkstra from node 0 once. For each path in the queue, check if it can return to 0 within the remaining budget. If not, drop it.
+
+import heapq
+from collections import deque
+
+
+class Path:
+      def __init__(self, visited, node, weight, time):
+          self.visited = visited
+          self.node = node
+          self.weight = weight
+          self.time = time
+
+
+def shortest_from_zero(adj_list, n):
+      """Dijkstra from node 0 to every other node."""
+      dist = [float('inf')] * n
+      dist[0] = 0
+      heap = [(0, 0)]
+      while heap:
+          d, u = heapq.heappop(heap)
+          if d > dist[u]:
+              continue
+          for v, w in adj_list[u]:
+              if d + w < dist[v]:
+                  dist[v] = d + w
+                  heapq.heappush(heap, (dist[v], v))
+      return dist
+  
+
+def gets_max(adj_list, n, weights, budget=24):
+      return_time = shortest_from_zero(adj_list, n)
+
+      queue = deque()
+      queue.append(Path({0}, 0, weights[0], 0))   # FIX: include start in visited
+      max_weight = total_time = 0
+
+      while queue:
+          curr = queue.popleft()
+          node = curr.node
+          time = curr.time
+          weight = curr.weight
+          vis = curr.visited
+
+          if node == 0 and time <= budget and time > 0:   # FIX: must have moved
+              if weight > max_weight:
+                  max_weight = weight
+                  total_time = time
+
+          for nei, wei in adj_list[node]:
+              new_time = time + wei
+              if new_time > budget:
+                  continue
+              # PRUNE 1: can we return to 0 from `nei` within remaining budget?
+              if new_time + return_time[nei] > budget:
+                  continue
+
+              new_vis = vis.copy()
+              new_vis.add(nei)
+              new_weigh = weights[nei] + weight if nei not in vis else weight
+              queue.append(Path(new_vis, nei, new_weigh, new_time))
+
+      return [max_weight, total_time]
+def main():
+      edges = [[0,1,2],[1,2,10],[2,3,1]]
+      weight = [0,4,5,6]
+      n = len(weight)
+      adj_list = [[] for _ in range(n)]
+      for u, v, w in edges:
+          adj_list[u].append([v, w])
+          adj_list[v].append([u, w])
+      print(gets_max(adj_list, n, weight))    # [9, 24]
+
+main()
+
 # For a stream of floating points, return any 3 points which have the distance between them less than a given value. 
 # Also, remove the 3 points from memory. There can be negative points as well and the distance has to be calculated 
 # between any two points. Does anyone have a solution for this?
