@@ -1939,7 +1939,63 @@ print(f"Max number of gifts bought: {max_count}")
 print(f"Gifts bought: {bought_gifts}")
 
 # Valid signal antenna
+		
 # O(N)
+# The condition says that for every position i in A, we need to know whether the same signal appears somewhere in B within distance D.
+
+# For a fixed index i, the only relevant part of B is:
+
+# B[i-D ... i+D]
+
+# because any index outside this range automatically violates the distance constraint.
+
+from collections import defaultdict
+
+  
+  def count_valid_signals(A, B, D):
+      n = len(A)
+      if n == 0:
+          return 0
+
+      window = defaultdict(int)
+  
+      # Initial window for i=0: B[0..min(D, n-1)].
+      for j in range(min(D + 1, n)):
+          window[B[j]] += 1
+
+      count = 0
+      for i in range(n):
+          if A[i] in window:
+              count += 1
+
+          # Slide window: B[i-D] leaves (becomes B[(i+1)-D-1]).
+          if i - D >= 0:
+              window[B[i - D]] -= 1
+              if window[B[i - D]] == 0:
+                  del window[B[i - D]]
+          # Slide window: B[i+D+1] enters (the new rightmost element).
+          if i + D + 1 < n:
+              window[B[i + D + 1]] += 1
+
+      return count
+
+  
+  # Test
+  A = [1, 3, 4, 3, 4, 5, 6]
+  B = [4, 1, 8, 7, 6, 3, 2]
+  D = 2
+  print(count_valid_signals(A, B, D))   # 4 ✓
+
+  # Edge: D=0
+  print(count_valid_signals([1, 1, 1], [1, 1, 1], 0))   # 3 ✓
+
+  # Edge: empty
+  print(count_valid_signals([], [], 2))   # 0 ✓
+
+  # Edge: D > n
+  print(count_valid_signals([1, 2], [1, 2], 100))   # 2 ✓
+
+
 mp = defaultdict(int)
 
 def fill_first_window(b, dist):
