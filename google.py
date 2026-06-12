@@ -1797,6 +1797,48 @@ print(get_sum(1) + get_sum(-1) - sum(nums)) #counted twice``
 
 # Find the number of partitions of an array such that each contiguous partition consists of atleast one negative number.
 
+
+  def get_partitions(nums):
+      """
+      Number of partitions where each contiguous block has at least one negative.
+
+      DP recurrence:
+        If nums[i] < 0:  dp[i] = 1 + sum(dp[0..i-1])
+                         (any prefix can end before the last block)
+        If nums[i] >= 0: dp[i] = dp[i-1]
+                         (last block must extend to include nums[i],
+                          and the prefix before it stays the same)
+        Base: dp[-1] = 1 (empty prefix has 1 partition: empty)
+
+      Time:  O(N) using running sum
+      Space: O(N) for dp -- could be O(1) by tracking only currsum + last
+      """
+      n = len(nums)
+      if n == 0:
+          return 1   # or 0 depending on convention
+
+      dp = [0] * n
+      currsum = 0   # cumulative sum of dp values up to index i-1
+
+      for i in range(n):
+          if nums[i] < 0:
+              dp[i] = currsum + 1
+          else:
+              dp[i] = dp[i-1] if i > 0 else 0
+          currsum += dp[i]
+
+      return dp[-1]
+
+
+  # Tests
+  print(get_partitions([-1, -2, -3, -4]))    # 8 (2^3)
+  print(get_partitions([3, -2, 5]))          # 1
+  print(get_partitions([3, 5, -2]))          # 1
+  print(get_partitions([1, 2, 3]))           # 0 (no negatives)
+  print(get_partitions([-1]))                # 1
+  print(get_partitions([]))                  # 1 (empty case)
+
+
 N = int(1e5)
 dp = [[-1 for _ in range(2)] for _ in range(N)]
 
