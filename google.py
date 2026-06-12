@@ -2235,6 +2235,49 @@ def func(edges):
 print(func([('a', 'b'), ('c', 'a'), ('b', 'c')]))
 
 # Bomb detonate
+def max_total_radii(arr):
+      """
+      Maximum sum of detonated bomb radii.
+      Pair (i, j) is valid iff:
+        - j - i > arr[i]  (i doesn't blow up j)
+        - j - i > arr[j]  (j doesn't blow up i)
+
+      DP: recur(i) = max total starting from index i.
+      Memoized.
+
+      Note: this assumes we don't NEED to cover all bombs (we can skip
+      some without penalty). If the problem requires all bombs to be
+      accounted for, this approach is incomplete.
+      """
+      n = len(arr)
+      memo = {}
+  
+      def recur(i):
+          if i >= n:
+              return 0
+          if i in memo:
+              return memo[i]
+
+          # Option 1: skip bomb i.
+          best = recur(i + 1)
+
+          # Option 2: pair bomb i with some j to its right.
+          # Need j - i > arr[i] AND j - i > arr[j].
+          for j in range(i + arr[i] + 1, n):
+              if j - i > arr[j]:
+                  # Valid pair. After detonation, both i and j gone, plus
+                  # bombs in their ranges. Next index to consider is
+                  # max(j + arr[j] + 1, i + arr[i] + 1) = j + arr[j] + 1
+                  # (since j > i + arr[i] and j + arr[j] > j > i + arr[i]).
+                  pair_value = arr[i] + arr[j] + recur(j + arr[j] + 1)
+                  best = max(best, pair_value)
+
+          memo[i] = best
+          return best
+
+      return recur(0)
+
+
 def func(arr):
     dp = {}
     def recur(i):
