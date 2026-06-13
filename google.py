@@ -2582,6 +2582,26 @@ for _ in range(10):
 # items grouped into sections, each of equal size.
 # if total unique elements(in all segments) in input = u and total elements = n, then TC: O(u * log u + n)
 
+  def reorganize_sections(sections):
+      if not sections:
+          return []
+
+      n = len(sections)
+      m = len(sections[0])
+
+      # Flatten and sort.
+      flat = []
+      for section in sections:
+          flat.extend(section)
+      flat.sort()
+
+      # Distribute: index i -> section (i % n), position (i // n).
+      result = [[0] * m for _ in range(n)]
+      for i, value in enumerate(flat):
+          result[i % n][i // n] = value
+
+      return result
+	  
 from collections import defaultdict
 
 def get_rearranged_array(input_list):
