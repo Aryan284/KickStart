@@ -4176,6 +4176,64 @@ public int maxPoints(int[] nums){
 
 
 # Coast graph
+def is_coast(grid, point):
+      if not grid or not grid[0]:
+          return False
+
+      m, n = len(grid), len(grid[0])
+      x, y = point
+
+      # Guard: point must be land.
+      if not (0 <= x < m and 0 <= y < n) or grid[x][y] != 'X':
+          return False
+
+      DIRS = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+
+      # BFS/DFS from each adjacent water cell to see if it reaches the boundary.
+      seen = set()
+
+      def reaches_boundary(start_r, start_c):
+          """BFS: can we reach the grid boundary from this water cell?"""
+          if (start_r, start_c) in seen:
+              return False
+
+          from collections import deque
+          queue = deque([(start_r, start_c)])
+          seen.add((start_r, start_c))
+
+          while queue:
+              r, c = queue.popleft()
+
+              # Check if this cell is on the boundary -> ocean.
+              if r == 0 or r == m - 1 or c == 0 or c == n - 1:
+                  return True
+
+              for dr, dc in DIRS:
+                  nr, nc = r + dr, c + dc
+                  if 0 <= nr < m and 0 <= nc < n and (nr, nc) not in seen and grid[nr][nc] == '.':
+                      seen.add((nr, nc))
+                      queue.append((nr, nc))
+
+          return False
+
+      # Check each adjacent water cell.
+      for dr, dc in DIRS:
+          nr, nc = x + dr, y + dc
+          if 0 <= nr < m and 0 <= nc < n and grid[nr][nc] == '.':
+              if reaches_boundary(nr, nc):
+                  return True
+
+      return False
+
+  
+  # Test
+  grid1 = [
+      ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'],
+      ['.', '.', '.', 'X', '.', 'X', '.', '.'],
+      ['.', '.', '.', 'X', 'X', '.', 'X', '.'],
+  ]
+  print(is_coast(grid1, (1, 3)))   # True
+
 
 def is_coast(grid, point):
     m, n = len(grid), len(grid[0])
