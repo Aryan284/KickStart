@@ -4071,6 +4071,51 @@ print(ans1)
 
 
 # on-call rotation schedule
+
+ def get_oncall_rotations(oncall):
+      if not oncall:
+          return []
+
+      events = []
+      for person, start, end in oncall:
+          events.append((start, -1, person))
+          events.append((end, 1, person))
+      events.sort(key=lambda x: (x[0], x[1]))
+
+      result = []
+      curr = set()
+      prev_ts = None
+
+      i = 0
+      n = len(events)
+      while i < n:
+          ts = events[i][0]
+
+          # Emit interval [prev_ts, ts] BEFORE processing events at ts.
+          if prev_ts is not None and prev_ts < ts and curr:
+              result.append([prev_ts, ts, set(curr)])
+
+          # Process all events at this timestamp.
+          while i < n and events[i][0] == ts:
+              _, sign, person = events[i]
+              if sign == -1:
+                  curr.add(person)
+              else:
+                  curr.discard(person)
+              i += 1
+
+          prev_ts = ts
+
+      return result
+
+
+  oncall = [
+      ["Abby", 1, 10],
+      ["Ben", 5, 7],
+      ["Carla", 6, 12],
+      ["David", 15, 17],
+  ]
+  print(get_oncall_rotations(oncall))
 # nlogn
 def get_oncall_rotations(oncall):
 	oncall_start_ends = []
