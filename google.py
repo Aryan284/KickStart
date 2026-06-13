@@ -2935,6 +2935,49 @@ print(get_original_array([4,3,2,1,0], 5))
 
 # Merged Interval with restriction
 
+  def get_merged_intervals_sweep(activities, restrictions):
+      """
+      Single-pass sweep: sort everything together, track 'restricted' state.
+
+      Time:  O((N + R) log(N + R))
+      Space: O(N + R)
+      """
+      if not activities:
+          return []
+
+      # For each activity, check if it overlaps any restriction.
+      # Sort restrictions to allow efficient overlap detection.
+      restrictions = sorted(restrictions)
+
+      def overlaps_any(start, end, restrictions):
+          # Binary search for the first restriction that COULD overlap.
+          # A restriction [r_s, r_e] overlaps [start, end] iff r_s <= end and r_e >= start.
+          lo, hi = 0, len(restrictions)
+          while lo < hi:
+              mid = (lo + hi) // 2
+              if restrictions[mid][1] < start:
+                  lo = mid + 1
+              else:
+                  hi = mid
+          # restrictions[lo:] are those with r_e >= start.
+          # Check if any of them has r_s <= end.
+          if lo < len(restrictions) and restrictions[lo][0] <= end:
+              return True
+          return False
+
+      activities = sorted(activities)
+      merged = []
+      for start, end in activities:
+          if overlaps_any(start, end, restrictions):
+              continue
+          if not merged or start > merged[-1][1]:
+              merged.append([start, end])
+          else:
+              merged[-1][1] = max(merged[-1][1], end)
+      return merged
+
+
+
 def get_merged_intervals(intervals, restricted_intervals):
     n = len(intervals)
     total_restricted_intervals = len(restricted_intervals)
