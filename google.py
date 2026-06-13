@@ -4505,6 +4505,66 @@ print(f"Minimum Path Length: {path_length}, Non-Visitable Nodes Count: {non_visi
 
 
 # Unavailble guys make it available Meeting Block
+ def availability_solver(n, calendar, D, P, X=1):
+      """
+      Solves all three variants:
+        - allAvailable: days where everyone is free
+        - pAvailable: days where ≥ P people are free
+        - pLongAvailable: intervals where ≥ P people are free for ≥ X consecutive days
+      
+      Time:  O(N + D)
+      Space: O(D)
+      """
+      days = [0] * (D + 2)
+
+      for l, r in calendar:
+          if l > D:
+              continue
+          days[max(1, l)] += 1
+          days[min(D + 1, r + 1)] -= 1
+
+      for i in range(1, D + 1):
+          days[i] += days[i - 1]
+
+      all_available = []
+      p_available_days = []
+
+      for i in range(1, D + 1):
+          if days[i] == 0:
+              all_available.append(i)
+          if n - days[i] >= P:
+              p_available_days.append(i)
+
+      # Convert P-available days to intervals.
+      p_intervals = []
+      if p_available_days:
+          start = p_available_days[0]
+          prev = p_available_days[0]
+          for d in p_available_days[1:]:
+              if d == prev + 1:
+                  prev = d
+              else:
+                  p_intervals.append((start, prev))
+                  start = d
+                  prev = d
+          p_intervals.append((start, prev))
+
+      # Filter by ≥ X consecutive days.
+      p_long_intervals = [(s, e) for s, e in p_intervals if e - s + 1 >= X]
+
+      return all_available, p_intervals, p_long_intervals
+
+
+  # Demo
+  n = 3
+  D = 10
+  calendar = [(1, 3), (5, 7), (2, 4)]
+
+  print(availability_solver(n, calendar, D, P=2, X=3))
+  # allAvailable: [8, 9, 10]
+  # p_intervals (≥ 2 free): [(1, 1), (4, 10)]
+  # p_long_intervals (≥ 2 free for ≥ 3 days): [(4, 10)]
+
 
 def availableDays(n, calendar, D, P):
     # Initialize days array with size D + 2
