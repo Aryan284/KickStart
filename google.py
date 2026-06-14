@@ -4675,6 +4675,24 @@ class Logger:
 # logger.should_print_message(21, "foo") # prints "foo"
 
 # Follow up uplicate messages as bugs. Don’t print a message if it’s repeated within the 10 seconds window(future or Past).
+
+def variant_2(events):
+      n = len(events)
+      blocked = [False] * n
+      last_idx = {}
+
+      for i, e in enumerate(events):
+          ts, msg = e["timeStamp"], e["message"]
+          if msg in last_idx:
+              prev = last_idx[msg]
+              if ts - events[prev]["timeStamp"] < 10:    # strict <
+                  blocked[prev] = True
+                  blocked[i] = True
+          last_idx[msg] = i
+
+      return [events[i]["message"] for i in range(n) if not blocked[i]]
+
+
 from collections import defaultdict
 
 def solve(message, time):
