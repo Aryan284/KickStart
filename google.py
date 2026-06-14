@@ -4884,6 +4884,51 @@ class Solution:
 
 # Merge Interval based on importance
 
+def merge_with_important_sweep(intervals, important):                                                                                                                                                             
+        events = []                                                                                                                                                                                                  
+        for i, (s, e) in enumerate(intervals):                                                                                                                                                                       
+            kind = "imp" if important[i] else "unimp"                                                                                                                                                                
+            events.append((s, kind, "start"))                                                                                                                                                                        
+            events.append((e + 1, kind, "end"))                                                                                                                                                                      
+                                                                                                                                                                                                                     
+        events.sort()  # sort by (time, kind, start_or_end)                                                                                                                                                          
+                                                                                                                                                                                                                     
+        imp_count = 0                                                                                                                                                                                                
+        unimp_count = 0                                                                                                                                                                                              
+        cur_state = None                                                                                                                                                                                             
+        cur_start = None                                                                                                                                                                                             
+        result = []                                                                                                                                                                                                  
+                                                                                                                                                                                                                     
+        i = 0                                                                                                                                                                                                        
+        while i < len(events):                                                                                                                                                                                       
+            t = events[i][0]                                                                                                                                                                                         
+            # Apply all events at this timestamp.                                                                                                                                                                    
+            while i < len(events) and events[i][0] == t:                                                                                                                                                             
+                _, kind, action = events[i]                                                                                                                                                                          
+                delta = 1 if action == "start" else -1                                                                                                                                                               
+                if kind == "imp":                                                                                                                                                                                    
+                    imp_count += delta                                                                                                                                                                               
+                else:                                                                                                                                                                                                
+                    unimp_count += delta                                                                                                                                                                             
+                i += 1                                                                                                                                                                                               
+                                                                                                                                                                                                                     
+            # Determine new state.                                                                                                                                                                                   
+            if imp_count > 0:                                                                                                                                                                                        
+                new_state = "imp"                                                                                                                                                                                    
+            elif unimp_count > 0:                                                                                                                                                                                    
+                new_state = "unimp"                                                                                                                                                                                  
+            else:                                                                                                                                                                                                    
+                new_state = None                                                                                                                                                                                     
+                                                                                                                                                                                                                     
+            # On state change, emit previous segment and start new.                                                                                                                                                  
+            if new_state != cur_state:                                                                                                                                                                               
+                if cur_state is not None and cur_start is not None:                                                                                                                                                  
+                    result.append((cur_start, t - 1))                                                                                                                                                                
+                cur_state = new_state                                                                                                                                                                                
+                cur_start = t if new_state is not None else None                                                                                                                                                     
+                                                                                                                                                                                                                     
+        return result
+
 intervals = [[1,5],[2,11],[8,9]]
 imps = [1,0,1]
 res = []
