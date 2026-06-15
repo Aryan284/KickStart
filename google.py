@@ -5206,6 +5206,84 @@ print(system.buy_order())  # Should return None as there are no more valid order
 # dictionary tracking stores the vertexes and edges V + E
 # visited set = V
 # stack = V
+from collections import deque
+
+def func(router, src, dest, limit):
+    print(src)
+    n = len(router)
+    if src == dest: return True
+    range_sq = limit**2
+    def in_range(i, j):
+        x1, y1 = router[i]
+        x2, y2 = router[j]
+        return (x1 - x2)**2 + (y1 - y2) ** 2 <= range_sq
+    vis = set()
+    vis.add(src)
+    queue = deque([src])
+    while queue:
+        node = queue.popleft()
+        if node == dest: return True
+        for v in range(n):
+            if v in vis: continue
+            if in_range(node, v):
+                queue.append(v)
+                vis.add(v)
+    return False
+
+router_positions = [[0, 0], [0, 8], [0, 17], [11, 0]]
+wireless_range = 10
+source_position = 0
+destination_position = 11
+print(func(router_positions, source_position, destination_position, wireless_range))
+
+# followup
+def can_reach_nearest(routers, source, destination, wireless_range):
+      """
+      Each router transmits ONLY to the nearest router within range.
+      Walk the single-chain path from source.
+      
+      Time:  O(N^2) if computing nearest on the fly per step
+             O(N^2) total if precomputing (same)
+      Space: O(N) for visited set
+      """
+      n = len(routers)
+      if source == destination:
+          return True
+      if not (0 <= source < n) or not (0 <= destination < n):
+          return False
+
+      range_sq = wireless_range ** 2
+  
+      def find_nearest(idx):
+          """Find the nearest router within range. Tie-break by lowest index."""
+          x1, y1 = routers[idx]
+          nearest = -1
+          min_dist_sq = float('inf')
+          for j in range(n):
+              if j == idx:
+                  continue
+              x2, y2 = routers[j]
+              d_sq = (x1 - x2) ** 2 + (y1 - y2) ** 2
+              if d_sq <= range_sq and d_sq < min_dist_sq:
+                  min_dist_sq = d_sq
+                  nearest = j
+          return nearest
+
+      visited = {source}
+      current = source
+
+      while True:
+          nxt = find_nearest(current)
+          if nxt == -1:
+              return False                  # dead end
+          if nxt == destination:
+              return True
+          if nxt in visited:
+              return False                  # entered a cycle, dest not on it
+          visited.add(nxt)
+          current = nxt
+
+
 def can_broadcast_shutdown(routers, source, destination, wireless_range) -> bool:
     n = len(routers)
     source_idx = destination_idx = -1
