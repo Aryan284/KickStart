@@ -5094,6 +5094,40 @@ print(has_common_interval(intervals2))  # Output: False
 
 import heapq
 
+
+  class SellOrderSystem:
+      def __init__(self):
+          self.active_orders = {}      # seller_id -> (price, timestamp)
+          self.heap = []                # (price, timestamp, seller_id)
+
+      def sell_order(self, seller_id, price, timestamp):
+          """
+          Place a new sell order. If seller has an active order, replace it.
+          Old order stays in heap as stale; skipped on buy.
+          
+          Time: O(log N)
+          """
+          self.active_orders[seller_id] = (price, timestamp)
+          heapq.heappush(self.heap, (price, timestamp, seller_id))
+
+      def buy_order(self):
+          """
+          Match the cheapest available order (price asc, then timestamp asc).
+          Lazy-skip stale entries.
+          
+          Time: O(log N) amortized
+          """
+          while self.heap:
+              price, timestamp, seller_id = heapq.heappop(self.heap)
+              if self.active_orders.get(seller_id) == (price, timestamp):
+                  del self.active_orders[seller_id]
+                  return seller_id, price, timestamp
+          return None
+  
+
+
+import heapq
+
 class SellOrderSystem:
     def __init__(self):
         self.active_orders = {}  # Maps seller_id to their current active order (price, timestamp)
