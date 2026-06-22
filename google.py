@@ -5590,6 +5590,83 @@ print(minimal_string(a,b))
 
 from collections import deque
 
+
+def find_valid_root(n, edges, colors):
+      """
+      n: number of vertices, labeled 0..n-1.
+      edges: list of [u, v] undirected edges (n-1 of them).
+      colors: list[int] with colors[i] in {0, 1, 2}.
+              Cycle going down the tree: colors[d+1] = (colors[d] + 1) % 3.
+      Returns: a valid root vertex, or -1.
+      """
+      if n == 1:
+          return 0
+
+      adj = [[] for _ in range(n)]
+      for u, v in edges:
+          adj[u].append(v)
+          adj[v].append(u)
+
+      # Defensive: problem guarantees degree <= 3, but check anyway
+      for i in range(n):
+          if len(adj[i]) > 3:
+              return -1
+
+      # Step 1: tight candidate filter
+      candidates = []
+      for v in range(n):
+          if len(adj[v]) > 2:
+              continue                                       # binary-root violation
+          expected_child = (colors[v] + 1) % 3
+          if all(colors[nb] == expected_child for nb in adj[v]):
+              candidates.append(v)
+
+      # Step 2: uniqueness check
+      if len(candidates) != 1:
+          return -1
+
+      root = candidates[0]
+
+      # Step 3: BFS validation of the entire cycle
+      visited = [False] * n
+      visited[root] = True
+      queue = deque([root])
+      while queue:
+          node = queue.popleft()
+          expected = (colors[node] + 1) % 3
+          for nb in adj[node]:
+              if visited[nb]:
+                  continue
+              if colors[nb] != expected:
+                  return -1
+              visited[nb] = True
+              queue.append(nb)
+  
+      return root
+
+
+  # --- demo ---
+  # Tree:  0(R=0) — 1(W=1) — 2(B=2)
+  #                  |
+  #                  3(B=2)
+  # child_color(R)=W ✓ for node 0's neighbor 1.
+  # child_color(W)=B ✓ for node 1's neighbors 2 and 3.
+print(find_valid_root(4, [[0,1],[1,2],[1,3]], [0,1,2,2]))   # 0
+
+# Single node — trivially valid
+print(find_valid_root(1, [], [0]))                          # 0
+
+# Two adjacent R's — depth 0 and depth 1 same color, broken cycle
+print(find_valid_root(2, [[0,1]], [0,0]))                   # -1
+
+# Chain R-W-B-R-W-B-R (length 7): valid with either endpoint as root
+print(find_valid_root(7, [[0,1],[1,2],[2,3],[3,4],[4,5],[5,6]], [0,1,2,0,1,2,0]))
+# returns one valid root (the unique one that passes the filter)
+
+
+
+from collections import deque
+
 # BFS function to check if the tree rooted at 'r' follows the correct color pattern
 def bfs(r, g, n, colors):
     vis = [0] * n  # Visited array to mark which nodes have been processed
