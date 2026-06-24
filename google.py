@@ -7218,6 +7218,53 @@ print(find_target_str(4))  # Output: "00002"
 
 #movie with the movie name and rating top K
 
+class MovieRecommenderBFS:
+      def __init__(self, ratings, similarities):
+          self.ratings = dict(ratings)
+          self.adj = defaultdict(set)
+          for a, b in similarities:
+              if a != b:
+                  self.adj[a].add(b)
+                  self.adj[b].add(a)
+  
+      def top_similar(self, movie, n):
+          if movie not in self.ratings or n <= 0:
+              return []
+
+          # BFS to find component members (excluding query)
+          visited = {movie}
+          queue = deque([movie])
+          component = []
+
+          while queue:
+              curr = queue.popleft()
+              for nb in self.adj[curr]:
+                  if nb in visited:
+                      continue
+                  visited.add(nb)
+                  component.append(nb)
+                  queue.append(nb)
+
+          # Heap-based top-N: negate rating for max-heap behavior,
+          # tie-break on name ascending
+          heap = [(-self.ratings[m], m) for m in component]
+          heapq.heapify(heap)
+
+          result = []
+          for _ in range(min(n, len(heap))):
+              _, name = heapq.heappop(heap)
+              result.append(name)
+          return result
+
+
+  # demo
+  ratings = {"A": 6, "B": 7, "C": 8, "D": 9, "E": 5}
+  similarities = [("A", "B"), ("B", "C"), ("C", "D"), ("A", "E")]
+
+  rec = MovieRecommenderBFS(ratings, similarities)
+  print(rec.top_similar("A", 2))   # ['D', 'C']
+
+
 class Movie:
     def __init__(self, title, rating):
         self.title = title
