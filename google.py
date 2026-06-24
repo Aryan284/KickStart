@@ -9201,6 +9201,61 @@ class LatencyServer:
 
 
 # followup
+
+Python conversion of the (fixed) multiset approach
+
+  from sortedcontainers import SortedList
+  from collections import deque
+
+  
+  class AverageClass:
+      def __init__(self):
+          self.q = deque()
+          self.mst = SortedList()       # Python's multiset equivalent
+          self.window = 0
+          self.top_num = 0
+          self.total = 0
+
+      def initialise(self, k, x):
+          if x >= k:
+              raise ValueError("x must be < k")
+          self.window = k
+          self.top_num = x
+          self.total = 0
+          self.q.clear()
+          self.mst.clear()
+  
+      def get_average(self, num):
+          # Step 1: always insert the new value first
+          self.q.append(num)
+          self.mst.add(num)
+          self.total += num
+
+          # Step 2: warming up
+          if len(self.q) < self.window:
+              return None
+
+          # Step 3: if buffer over-sized, evict oldest (one occurrence only)
+          if len(self.q) > self.window:
+              front = self.q.popleft()
+              self.total -= front
+              self.mst.remove(front)        # removes one occurrence, not all
+
+          # Step 4: compute trimmed sum WITHOUT mutating self.total
+          trimmed = self.total
+          for i in range(self.top_num):
+              trimmed -= self.mst[-1 - i]   # negative index = largest values at end
+
+          return trimmed / (self.window - self.top_num)
+
+  
+  # --- demo ---
+  avg = AverageClass()
+  avg.initialise(5, 2)                       # window=5, drop top 2
+  for v in [60, 70, 30, 100, 30, 20, 40, 80]:
+      print(avg.get_average(v))
+
+
 def run():
     bottom = SortedList()
     top = SortedList()
