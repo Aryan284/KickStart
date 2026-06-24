@@ -7403,6 +7403,50 @@ print(topKSimilarMovies(A, 2))
 
 # Ad server get advertisment
 
+import heapq
+
+
+  class Ad:
+      def __init__(self, content, score, delay):
+          self.content = content
+          self.score = score
+          self.delay = delay
+
+
+  class AdServer:
+      def __init__(self):
+          self.available = []     # max-heap by score: (-score, ins, ad)
+          self.cooldown = []      # min-heap by ready_time: (ready_time, -score, ins, ad)
+          self.time = 0
+          self._counter = 0       # insertion order for tie-breaks
+
+      def insert_ad(self, content, score, delay):
+          ad = Ad(content, score, delay)
+          heapq.heappush(self.available, (-score, self._counter, ad))
+          self._counter += 1
+
+      def serve_ad(self):
+          # Tentatively decide we'll serve at time self.time + 1
+          next_time = self.time + 1
+
+          # Release cooldown ads ready by next_time
+          while self.cooldown and self.cooldown[0][0] <= next_time:
+              _, neg_score, ins, ad = heapq.heappop(self.cooldown)
+              heapq.heappush(self.available, (neg_score, ins, ad))
+
+          if not self.available:
+              return None
+  
+          neg_score, ins, ad = heapq.heappop(self.available)
+          self.time = next_time
+
+          # Block this ad for the next `delay` serves
+          ready_time = self.time + ad.delay + 1
+          heapq.heappush(self.cooldown, (ready_time, neg_score, ins, ad))
+          return ad.content
+
+
+
 class Ad:
 
     def __init__(self, content, score):
