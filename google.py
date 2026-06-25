@@ -9882,63 +9882,28 @@ Step 4: Code
 
 
 product max k
-def max_product(arr, k):
-      """
-      Maximum product of k elements from arr.
-
-      Branches:
-        1. No positives (arr[-1] <= 0):
-           - k even -> take k MOST-negative (left k); their pairs are largest positives.
-           - k odd  -> take k LEAST-negative (right k); result is least-negative.
-        2. At least one positive:
-           - If k odd, take the rightmost (largest, positive). Now k even.
-           - Greedy pairs: bigger of (left-pair, right-pair) each step.
-      """
-      n = len(arr)
-      if k == 0:
-          return 1
-      if k > n or k < 0:
-          raise ValueError("invalid k")
-
-      arr = sorted(arr)
-
-      # No positives at all -> special handling.
-      if arr[-1] <= 0:
-          if k % 2 == 0:
-              # Pairs of most-negative give biggest positives.
-              chosen = arr[:k]
-          else:
-              # Forced negative result -> take least-negative k.
-              chosen = arr[-k:]
-          product = 1
-          for v in chosen:
-              product *= v
-          return product
-
-      # General case: at least one positive exists.
-      left, right = 0, n - 1
-      product = 1
-
-      if k % 2 == 1:
-          product *= arr[right]
-          right -= 1
-          k -= 1
-
-      while k > 0:
-          left_pair = arr[left] * arr[left + 1]
-          right_pair = arr[right] * arr[right - 1]
-          if left_pair > right_pair:
-              product *= left_pair
-              left += 2
-          else:
-              product *= right_pair
-              right -= 2
-          k -= 2
-
-      return product
-a= [-5, 6, 2, -2, 4, -1, 7]
-k = 3
-print(max_product(a, k))
+from collections import defaultdict
+def max_k(arr, k):
+    n = len(arr)
+    arr = sorted(arr)
+    left = 0
+    res = 1
+    right = n - 1
+    if k % 2 == 1:
+        res *= arr[right]
+        right -= 1
+        k -= 1
+    while k > 0:
+        pair_left = arr[left] * arr[left + 1]
+        pair_right = arr[right] * arr[right - 1]
+        if pair_left > pair_right:
+            left += 2
+            res *= pair_left
+        else:
+            right += 2
+            res *= pair_right
+        k -= 2
+    return res
 
 
 
