@@ -9330,71 +9330,56 @@ run()
 # |A[i] - C[k]| <= d  
 # |B[j] - C[k]| <= d
 
-def merge_arr(A: List[int], B: List[int], C: List[int]):
+def merge_func(a, b, c):
     i = j = k = 0
-    merged = []
-
-    n, m, o = len(A), len(B), len(C)
-
-    while i < n or j < m or k < o:
-        a = A[i] if i < n else float('inf')
-        b = B[j] if j < m else float('inf')
-        c = C[k] if k < o else float('inf')
-
-        mn = min(a, b, c)
-
-        if mn == a:
-            merged.append((a, 0))
+    n_a = len(a)
+    n_b = len(b)
+    n_c = len(c)
+    merge = []
+    while i < n_a or j < n_b or k < n_c:
+        mini = float("inf")
+        src = -1
+        if i < n_a  and a[i] < mini:
+            mini = a[i]
+            src = 0
+        if j < n_b  and b[j] < mini:
+            mini = b[j]
+            src = 1
+        if k < n_c and c[k] < mini:
+            mini = c[k]
+            src = 2
+        merge.append((mini, src))
+        if src == 0:
             i += 1
-        elif mn == b:
-            merged.append((b, 1))
+        elif src == 1:
             j += 1
-        else:
-            merged.append((c, 2))
+        elif src == 2:
             k += 1
+    return merge
+        
 
-    return merged
+def func(a, b, c, d):
+    merge = merge_func(a, b, c)
+    print(merge)
+    cnt = [0,0,0]
+    left = 0
+    total = 0
+    for r, (val, src) in enumerate(merge):
+        cnt[src] += 1
+        while left <= r and merge[r][0] - merge[left][0] > d:
+            cnt[merge[left][1]] -= 1
+            left += 1
+        prod = cnt[0] * cnt[1] * cnt[2]
+        total += prod//cnt[src]
+    return total
 
 
-def count_triplets(A: List[int], B: List[int], C: List[int], d: int) -> int:
-    merged = merge_arr(A, B, C)
 
-    start = 0
-    cntA = cntB = cntC = 0
-    ans = 0
+A = [1, 2, 3, 4, 5]
+B = [2, 3, 4]
+C = [1, 3, 5]
+print(func(A, B, C, 1))   # 11
 
-    for end in range(len(merged)):
-
-        val, typ = merged[end]
-
-        # include current element
-        if typ == 0:
-            cntA += 1
-        elif typ == 1:
-            cntB += 1
-        else:
-            cntC += 1
-
-        # shrink window while invalid
-        while start < end and val - merged[start][0] > d:
-            t = merged[start][1]
-            if t == 0:
-                cntA -= 1
-            elif t == 1:
-                cntB -= 1
-            else:
-                cntC -= 1
-            start += 1
-
-        # count contributions
-        if typ == 0:
-            ans += cntB * cntC
-        elif typ == 1:
-            ans += cntA * cntC
-        else:
-            ans += cntA * cntB
-
-    return ans
 
 
 square detect 
