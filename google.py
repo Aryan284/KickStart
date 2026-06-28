@@ -7630,6 +7630,106 @@ class Solution:
 # Once we have accessed a key-value pair, the score was supposed to increase by 1. While evicting I need to follow the standard pattern but 
 # I was supposed to evict only those values whose score was even.
 
+ class Node:
+      __slots__ = ("key", "content", "score", "prev", "next")
+      def __init__(self, key, content, score):
+          self.key = key
+          self.content = content
+          self.score = score
+          self.prev = None
+          self.next = None
+
+
+  class DoublyLinkedList:
+      """Sentinel-based DLL. head <-> ... <-> tail. MRU near head, LRU near tail."""
+      def __init__(self):
+          self.head = Node(None, None, 0)
+          self.tail = Node(None, None, 0)
+          self.head.next = self.tail
+          self.tail.prev = self.head
+          self.size = 0
+
+      def add_to_head(self, node):
+          node.prev = self.head
+          node.next = self.head.next
+          self.head.next.prev = node
+          self.head.next = node
+          self.size += 1
+
+      def remove(self, node):
+          node.prev.next = node.next
+          node.next.prev = node.prev
+          node.prev = node.next = None
+          self.size -= 1
+
+      def pop_tail(self):
+          if self.size == 0:
+              return None
+          node = self.tail.prev
+          self.remove(node)
+          return node
+
+
+  class EvenEvictLRU:
+      def __init__(self, capacity):
+          if capacity < 1:
+              raise ValueError("capacity must be >= 1")
+          self.capacity = capacity
+          self.cache = {}                              # key -> Node
+          self.even_list = DoublyLinkedList()
+          self.odd_list = DoublyLinkedList()
+
+      def _list_for(self, score):
+          return self.even_list if score % 2 == 0 else self.odd_list
+  
+      def _touch(self, node):
+          """Increment score, move to head of the parity-correct list."""
+          self._list_for(node.score).remove(node)
+          node.score += 1
+          self._list_for(node.score).add_to_head(node)
+  
+      def get(self, key):
+          node = self.cache.get(key)
+          if node is None:
+              return None
+          self._touch(node)
+          return node.content
+
+      def put(self, key, content):
+          if key in self.cache:
+              node = self.cache[key]
+              node.content = content
+              self._touch(node)
+              return True
+
+          # New key — evict if at capacity
+          if len(self.cache) >= self.capacity:
+              evicted = self.even_list.pop_tail()
+              if evicted is None:
+                  return False                          # all entries have odd scores; reject
+              del self.cache[evicted.key]
+
+          # Insert new node with score 0 (even)
+          node = Node(key, content, 0)
+          self.even_list.add_to_head(node)
+          self.cache[key] = node
+          return True
+
+  Trace example
+
+  Capacity = 3.
+
+  1. put(1, "A"): cache={1}, even=[1], odd=[]. Score of 1 = 0.
+  2. put(2, "B"): cache={1,2}, even=[2, 1], odd=[]. Scores both 0.
+  3. put(3, "C"): even=[3, 2, 1], odd=[].
+  4. get(2) → score(2) becomes 1 (odd). Move from even to odd. even=[3, 1], odd=[2]. Returns "B".
+  5. get(2) → score(2) becomes 2 (even). Move back to even (head). even=[2, 3, 1], odd=[]. Returns "B".
+  6. put(4, "D"): capacity full. Pop tail of even = key 1 (LRU even). Insert 4. even=[4, 2, 3], odd=[].
+  7. get(3) → score(3) becomes 1. Move to odd. even=[4, 2], odd=[3]. Returns "C".
+  8. get(2) → score(2) becomes 3. Move to odd. even=[4], odd=[2, 3].
+  9. put(5, "E"): capacity full. Pop tail of even = key 4. Insert 5. even=[5], odd=[2, 3].
+
+
 class Node:
 
     def __init__(self, key, content, score):
