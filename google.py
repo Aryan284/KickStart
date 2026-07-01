@@ -8176,8 +8176,58 @@ def visible_people_left(heights):
 
     return result
 
-# Bad commit
+# Bad commit all
 commits = [10,9,9,8,8,8,7]
+
+def find_all_bad_commits(N, worseCommit):
+      """
+      N: number of commits, 1-indexed 1..N.
+      worseCommit(a, b): returns True if commit b's performance < commit a's.
+      Returns: list of commit indices that introduced a drop.
+      """
+      result = []
+
+      def helper(lo, hi):
+          if lo >= hi:
+              return
+          # If entire range has same performance, no bad commits inside.
+          if not worseCommit(lo, hi):
+              return
+          # Adjacent pair — hi is the bad commit
+          if lo + 1 == hi:
+              result.append(hi)
+              return
+          # Split and recurse
+          mid = (lo + hi) // 2
+          helper(lo, mid)
+          helper(mid, hi)
+
+      helper(1, N)
+      return sorted(result)
+
+  def first_bad_commit(N, worseCommit):
+      # Binary search: find smallest k in [2..N] where worseCommit(k-1, k) is True.
+      # But that's O(log N) if we compare against a fixed baseline (commit 1).
+      lo, hi = 2, N
+      result = -1
+      while lo <= hi:
+          mid = (lo + hi) // 2
+          if worseCommit(1, mid):
+              result = mid
+              hi = mid - 1
+          else:
+              lo = mid + 1
+      return result
+  # --- demo ---
+  # Performance: 10, 10, 10, 8, 8, 8, 5, 5, 5  (indexed 1..9)
+  performance = [None, 10, 10, 10, 8, 8, 8, 5, 5, 5]   # None for index 0
+
+  def worseCommit(a, b):
+      return performance[b] < performance[a]
+
+  print(find_bad_commits(9, worseCommit))   # [4, 7]
+
+
 
 def worse_commit(left, right):
     return commits[left] > commits[right]  
