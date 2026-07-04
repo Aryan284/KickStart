@@ -7591,6 +7591,13 @@ def solve(row, usedCols):
 
 
 class Solution:
+	 def countRook(r1, r2, c1, c2):
+      """
+      Oracle: count rooks in the inclusive rectangle [r1..r2] × [c1..c2].
+      Signature matches the problem: (row_start, row_end, col_start, col_end).
+      """
+      return sum(1 for r, c in rooks if r1 <= r <= r2 and c1 <= c <= c2)
+
     def findMissingRook(self, n):
 
         # Find missing row
