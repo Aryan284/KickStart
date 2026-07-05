@@ -7062,6 +7062,39 @@ print(diameter)
 
 #  maximum paint operation with favorite color c
 
+def beauty_of_path(block_colors, c):
+      """
+      Returns length of longest contiguous run of color c.
+      """
+      best = 0
+      current = 0
+      for color in block_colors:
+          if color == c:
+              current += 1
+              if current > best:
+                  best = current
+          else:
+              current = 0
+      return best
+
+follow up 1: 
+
+def path_beauty_map(block_colors):
+      max_run = defaultdict(int)
+      current_color = None
+      current_len = 0
+      for color in block_colors:
+          if color == current_color:
+              current_len += 1
+          else:
+              current_color = color
+              current_len = 1
+          # Update on every step — avoids "forgetting to flush" bug
+          if current_len > max_run[color]:
+              max_run[color] = current_len
+      return max_run
+	
+follow up 2
 def main():
     print("Hello World!")
     nums_1 = [1, 2, 2, 3, 2, 2, 2, 4]
