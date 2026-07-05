@@ -6424,95 +6424,72 @@ def findAllOnesRecursive(i, n, arr, result):
 # Space Complexity:
 # The space required for the graph adjacency list is O(V + E).
 # The visited set and the queue can each hold up to O(V) elements, leading to an overall space complexity of O(V + E).
+ def shortest_path_avoiding_restricted(edges, start, end, restricted):
+      """
+      edges: list of undirected edges as (u, v) tuples.
+      start, end: source and destination nodes.
+      restricted: set of nodes to avoid.
+      Returns: list of nodes forming shortest path, or [] if no path exists.
+      """
+      # Special cases
+      if start in restricted or end in restricted:
+          return []
+      if start == end:
+          return [start]
 
-from collections import deque, defaultdict
+      # Build adjacency list, excluding restricted nodes from neighbors
+      graph = defaultdict(list)
+      for u, v in edges:
+          if u not in restricted and v not in restricted:
+              graph[u].append(v)
+              graph[v].append(u)
 
-def find_shortest_path(edges, start, end, restricted):
-    # Step 1: Create the graph as an adjacency list
-    graph = defaultdict(list)
-    for u, v in edges:
-        graph[u].append(v)
-        graph[v].append(u)
+      # BFS with parent pointers
+      parent = {start: None}
+      queue = deque([start])
 
-    # Step 2: Initialize BFS queue and visited set
-    queue = deque([(start, [start])])  # Queue stores tuples (node, path to reach that node)
-    visited = set([start])  # Start node is already visited
+      while queue:
+          node = queue.popleft()
+          if node == end:
+              # Reconstruct path
+              path = []
+              cur = node
+              while cur is not None:
+                  path.append(cur)
+                  cur = parent[cur]
+              return path[::-1]
 
-    # Step 3: Perform BFS
-    while queue:
-        node, path = queue.popleft()
+          for nb in graph[node]:
+              if nb not in parent:
+                  parent[nb] = node
+                  queue.append(nb)
 
-        # Step 4: If we reach the end node, return the path
-        if node == end:
-            return path
+      return []    # no path
 
-        # Explore neighbors
-        for neighbor in graph[node]:
-            if neighbor not in visited and neighbor not in restricted:
-                visited.add(neighbor)
-                queue.append((neighbor, path + [neighbor]))
+def min_passes_dijkstra(edges, start, end, restricted):
+      graph = defaultdict(list)
+      for u, v in edges:
+          graph[u].append(v)
+          graph[v].append(u)
+  
+      dist = {start: 0}
+      pq = [(0, start)]
 
-    # If no path is found
-    return []
+      while pq:
+          d, node = heapq.heappop(pq)
+          if node == end:
+              return d
+          if d > dist[node]:
+              continue
 
-# Example usage
-edges = [{1, 2}, {2, 3}, {1, 4}, {4, 5}, {3, 5}]
-start = 1
-end = 3
-restricted = {2}  # Node 2 is restricted
+          for nb in graph[node]:
+              cost = 1 if nb in restricted else 0
+              new_d = d + cost
+              if new_d < dist.get(nb, float('inf')):
+                  dist[nb] = new_d
+                  heapq.heappush(pq, (new_d, nb))
 
-# Find the shortest path from start to end, avoiding restricted nodes
-result = find_shortest_path(edges, start, end, restricted)
-print("Shortest path:", result)
-
-# Follow up: special kind of minimum pass to cross the restricted node
-from collections import deque, defaultdict
-
-def min_passes_to_reach_end(edges, start, end, restricted):
-    # Step 1: Create the graph as an adjacency list
-    graph = defaultdict(list)
-    for u, v in edges:
-        graph[u].append(v)
-        graph[v].append(u)
-
-    # Step 2: Initialize BFS queue and visited set
-    queue = deque([(start, 0)])  # Queue stores tuples (node, number of passes)
-    visited = {}  # Dictionary stores the minimum number of passes for each node
-
-    visited[start] = 0  # We start with 0 passes from the start node
-
-    # Step 3: Perform BFS
-    while queue:
-        node, passes = queue.popleft()
-
-        # Step 4: If we reach the end node, return the number of passes used
-        if node == end:
-            return passes
-
-        # Explore neighbors
-        for neighbor in graph[node]:
-            # Check if we are crossing a restricted node
-            new_passes = passes + 1 if neighbor in restricted else passes
-
-            # Only explore if we haven't visited this neighbor with fewer or equal passes
-            if neighbor not in visited or new_passes < visited[neighbor]:
-                visited[neighbor] = new_passes
-                queue.append((neighbor, new_passes))
-
-    # If no path is found, return -1 (though it's assumed there is always a valid path with enough passes)
-    return -1
-
-# Example usage
-edges = [{1, 2}, {1,4}, {2, 3}, {4, 5}, {3, 5}, {3,6}]
-start = 1
-end = 5
-restricted = {2, 4}  # Node 2 is restricted
-
-# Find the minimum number of passes needed to reach the end
-result = min_passes_to_reach_end(edges, start, end, restricted)
-print("Minimum number of passes:", result)
-
-
+      return -1
 
 
 # given URL largest files inside the folder
