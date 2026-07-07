@@ -5827,6 +5827,28 @@ print(obj.min_cost(root))
 
 
 # DND Meeting 
+def func(meeting, dnd):
+    merge = []
+    if not meeting: return []
+    sorted_meet = sorted(meeting)
+    for s, e in sorted_meet:
+        if merge and merge[-1][1] >= s:
+            merge[-1][1] = max(merge[-1][1], e)
+        else:
+            merge.append([s, e])
+    dnd_s, dnd_e = dnd
+    res = []
+    for s, e in merge:
+        if e <= dnd_s or s >= dnd_e:
+            res.append([s, e])
+            continue
+        if s < dnd_s:
+            res.append([s, dnd_s])
+        if e > dnd_e:
+            res.append([dnd_e, e])
+        
+        
+    return res
 
 def merge_meetings(meetings, dnd):
     # Step 1: Sort meetings based on start time
