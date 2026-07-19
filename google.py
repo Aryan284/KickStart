@@ -708,53 +708,31 @@ from collections import defaultdict, deque
 # Thus, the overall space complexity is O(m).
 
 # Neighbour rearrange 
-
-import heapq
-from collections import defaultdict
-
-class Pair:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
-    def __lt__(self, other):
-        if self.y == other.y:
-            return self.x < other.x
-        return self.y > other.y
-
-def rearrange(neighborhoods):
-    n = len(neighborhoods)
-    map_count = defaultdict(int)
-
-    for lst in neighborhoods:
-        for i in lst:
-            map_count[i] += 1
-
-    queue = []
-    for key, value in map_count.items():
-        heapq.heappush(queue, Pair(key, value))
-    result = []
-    for i in range(n):
-        used = []
-        new_neighborhood = []
-
-        size = len(neighborhoods[i])
-
-        while size > 0 and queue:
-            pair = heapq.heappop(queue)
-            new_neighborhood.append(pair.x)
-            pair.y -= 1
-            if pair.y > 0:
-                used.append(pair)
-            size -= 1
-
-        new_neighborhood.sort()
-        result.append(new_neighborhood)
-
-        for item in used:
-            heapq.heappush(queue, item)
-
-    return result
+def func(neightbour):
+    n = len(neightbour)
+    # capacitiy
+    caps = [len(nb) for nb in neightbour]
+    # get count
+    freq = defaultdict(int)
+    for nb in neightbour:
+        for i in nb:
+            freq[i] += 1
+    heap = [(-cap, i) for i, cap in enumerate(caps)]
+    heapify(heap)
+    res = [[] for _ in range(n)]
+    print(freq, caps)
+    for num in sorted(freq.keys()):
+        val = freq[num]
+        picked = []
+        for _ in range(val):
+            cap, idx = heappop(heap)
+            res[idx].append(num)
+            new_Cap = -cap - 1
+            picked.append((new_Cap, idx))
+        for new, id in picked:
+            heappush(heap, (-new, id))
+    print(res)
+	
 
 if __name__ == "__main__":
     neighborhoods = [
