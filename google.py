@@ -905,52 +905,69 @@ print(s, dic[0])
 # BFS exploration: O(2^n * n), where:
 # 2^n represents the number of possible subsets of visited nodes.
 # n represents the cost of copying the visited set and iterating over the neighbors.
+from collections import defaultdict
+# def func(edges, maxTime, values):
+#     graph = defaultdict(list)
+#     n = len(edges)
+#     for u, v, t in edges:
+#         graph[u].append((v, t))
+#         graph[v].append((u, t))
+#     def dfs(node, score, time):
+#         if vis[node] == 0:
+#             score += values[node]
+#         vis[node] += 1
+#         if node == 0:
+#             ans[0] = max(ans[0], score)
+#         for nei, wei in graph[node]:
+#             if wei + time <= maxTime:
+#                 dfs(nei, score, time + wei)
+#         vis[node] -= 1
+            
+#     vis = [0] * n
+#     ans = [0]
+#     dfs(0,0,0)
+#     return ans[0]
 
-from collections import deque
+# edges = [[0,1,2],[1,2,10],[2,3,1]]
+# weight = [0,4,5,6]
+# maxTime = 24
 
-class Path:
-    def __init__(self, visited, node, weight, time):
-        self.visited = visited
-        self.node = node
-        self.weight = weight
-        self.time = time
-def gets_max(adj_list, n, weights):
-    queue = deque()
-    queue.append(Path(set(), 0, weights[0], 0))
-    max_weight = total_time = 0
-    while queue:
-        curr = queue.popleft()
-        # print(curr)
-        node = curr.node
-        time = curr.time
-        weight = curr.weight
-        vis = curr.visited
-        if node == 0 and time <= 24:
-            if weight > max_weight:
-                max_weight = weight
-                total_time = time
-        for nei, wei in adj_list[node]:
-            if time + wei <= 24:
-                new_vis = vis.copy()
-                new_vis.add(nei)
-                new_weigh = weights[nei] + weight if nei not in vis else weight
-                queue.append(Path(new_vis, nei, new_weigh, time + wei))
-    return [max_weight, total_time]
+# print(func(edges, maxTime, weight))
+
+
+def func(values, edges, maxTime):
+    n = len(values)
+    graph = [[] for _ in range(n)]
+    for u, v, t in edges:
+        graph[u].append((v, t))
+        graph[v].append((u, t))
+
+    visited = [0] * n
+    ans = 0
+
+    def dfs(node, time, score):
+        nonlocal ans
+        if visited[node] == 0:
+            score += values[node]
+        
+        visited[node] += 1
+
+        if node == 0:
+            ans = max(ans, score)
+        
+        for nei, cost in graph[node]:
+            if time + cost <= maxTime:
+                dfs(nei, time + cost, score)
+        
+        visited[node] -= 1
     
+    dfs(0, 0, 0) 
+    return ans 
+edges = [[0,1,2],[1,2,10],[2,3,1]]
+weight = [0,4,5,6]
+maxTime = 24
 
-def main():
-    edges = [[0,1,2],[1,2,10],[2,3,1]]
-    weight = [0,4,5,6]
-    n = len(weight)
-    adj_list = [[] for _ in range(n)]
-    for edge in edges:
-        adj_list[edge[0]].append([edge[1], edge[2]])
-        adj_list[edge[1]].append([edge[0], edge[2]])
-    print(gets_max(adj_list, n, weight))
-    
-main()
-
-
+print(func(weight, edges, maxTime))
 
 # Precompute Dijkstra from node 0 once. For each path in the queue, check if it can return to 0 within the remaining budget. If not, drop it.
 
