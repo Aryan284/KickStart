@@ -1124,23 +1124,46 @@ if __name__ == "__main__":
 # supposed to answer can I reach from current city to the destination city on time.
 
 
-def func(trains):
-    adj = defaultdict(list)
-    for startcity, endcity, startime, endtime in trains:
-        adj[startcity].append((endtime - startime, endcity))
-    minheap = [[currTime, startcity]]
+from collections import defaultdict
+from heapq import heappop, heappush
+
+def can_reach(trains, current_city, current_time, destination_city, destination_time):
+    graph = defaultdict(list)
+    for startcity, starttime, endcity, endtime in trains:
+        graph[startcity].append((starttime, endtime, endcity))
+        
+    minheap = [(current_time, current_city)]
+    early = {current_city: current_time}
     while minheap:
-        time, city = heappop(minheap)
-        if time > destinationtime:
-            return False
-        
-        if city in vis: continue
-        vis.add(city)
-        for nei_t, nei_city in adj[city]:
-            if nei_city not in vis:
-                newtriptime = nei_t + time
-            heappush(minheap, (newtriptime, nei_city))
-        
+        current_time, current_city = heappop(minheap)
+        if current_city == destination_city:
+            return current_time <= destination_time
+        if current_time > destination_time:
+            continue
+        if current_time > early.get(current_city, float("inf")):
+            continue
+        for starttime, endtime, endcity in graph[current_city]:
+            if current_time > starttime:
+                continue
+            if endtime > destination_time:
+                continue
+            if endtime < early.get(endcity, float("inf")):
+                early[endcity] = endtime
+                heappush(minheap, (endtime, endcity))
+    return early.get(destination_city, float("inf")) <= destination_time
+
+trains = [
+      ('A', 8, 'B', 10),
+      ('B', 11, 'C', 13),
+      ('B', 12, 'D', 15),
+      ('A', 9, 'D', 20),
+  ]
+print(can_reach(trains, 'A', 7, 'D', 16))   # True (A→B→D, arrive at 15 ≤ 16)
+print(can_reach(trains, 'A', 7, 'D', 14))   # False (arrive at earliest 15 > 14)
+print(can_reach(trains, 'A', 10, 'C', 15))  # False (missed A→B, no path)
+print(can_reach(trains, 'X', 0, 'Y', 100))  # False (X not in graph)
+
+
 
 # IP Belong to which country
 
