@@ -697,15 +697,9 @@ from collections import defaultdict, deque
 # Building the frequency map: O(m)
 # Building the heap: O(u log u)
 # Constructing new neighborhoods: O(n * (size log u + size log size)) ≈ O(m log u + m log size) for all neighborhoods.
-# Reinserting elements: O(m log u)
-# Thus, the total time complexity is:O(m log u + m log size)
-# Since size can be at most m, and u can also be at most m (in the worst case), 
-# the overall time complexity simplifies to:O(m log m)
-# Space Complexity:
-# Heap: O(u), where u is the number of unique elements.
-# Frequency map: O(u)
-# Result list: O(m), where m is the total number of elements.
-# Thus, the overall space complexity is O(m).
+ # Time: O(D · n · log n) where D = distinct numbers, n = number of neighborhoods. For each of D distinct numbers, we pop and push k ≤ n from a heap of size n. 
+# Total heap ops: O(sum of k · log n) = O(total_houses · log n).
+ #  - Space: O(n + D) for heap and freq map.
 
 # Neighbour rearrange 
 def func(neightbour):
