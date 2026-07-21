@@ -2288,22 +2288,27 @@ def max_total_radii(arr):
           return best
 
       return recur(0)
+def func(detonate):
+    
+    def solve(i):
+        if i >= n: return 0
+        if i in memo: return memo[i]
+        # skip
+        best = solve(i + 1)
+        for j in range(i + 1, n):
+            if j - i > detonate[i] and j - i > detonate[j]:
+                next_i = max(i + detonate[i], j + detonate[j]) + 1
+                val = detonate[i] + detonate[j] + solve(next_i)
+                if val > best:
+                    best = val
+        memo[i] = best
+        return memo[i]
+        
+    memo = {}
+    n = len(detonate)
+    return solve(0)
 
 
-def func(arr):
-    dp = {}
-    def recur(i):
-        if i >= len(arr): return 0
-        maxi = recur(i + 1)
-        for j in range(i + arr[i] + 1, len(arr)):
-           maxi = max(maxi, arr[i] + arr[j], recur(j + arr[j] + 1))
-        dp[i] = maxi
-        return dp[i]
-    res = 0
-    res =max(res, recur(0))
-    print(res)
-arr = []
-func(arr)
 
 # Greedy Commit offset
 def greedy_commits(arr):
