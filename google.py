@@ -2680,6 +2680,36 @@ class Log:
         self.time = time
         self.tag = tag
 
+def find_timeouts_linear(events, T):
+      """
+      Assumes events arrive in timestamp order.
+      Uses a queue (FIFO) instead of heap.
+      Time: O(N). Space: O(N).
+      """
+      queue = deque()    # deque of (deadline, id) — sorted by deadline naturally
+      pending = {}       # id → start_time
+      completed = set()
+      timeouts = []
+
+      for id_, ts, typ in events:
+          # Before processing, check for timeouts detected by now
+          while queue and queue[0][0] < ts:
+              deadline, timeout_id = queue.popleft()
+              if timeout_id in pending and timeout_id not in completed:
+                  timeouts.append((timeout_id, ts))
+                  pending.pop(timeout_id)
+              # Else: stale entry (already completed) — just discard
+  
+          # Process the current event
+          if typ == 'Start':
+              pending[id_] = ts
+              queue.append((ts + T, id_))
+          elif typ == 'End':
+              pending.pop(id_, None)
+              completed.add(id_)
+
+      return timeouts
+	
 def find_timeout(Logs: List[Log], T: int) -> Tuple[Optional[int], Optional[int]]:
     q = deque()
     s = {}
